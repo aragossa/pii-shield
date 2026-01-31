@@ -1,3 +1,3 @@
 module github.com/pii-shield/algorythm
 
-go 1.21
+go 1.25
