@@ -12,13 +12,13 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 Developers often forget to mask sensitive data. Traditional regex filters in Fluentd/Logstash are slow, hard to maintain, and consume expensive CPU on log aggregators.
 
 **PII-Shield sits right next to your app container:**
-- 🚀 **High Performance:** Written in Go, designed for low-latency log processing.
-- 🧠 **Context-Aware Entropy Analysis:** Detected high-entropy secrets even without keys (e.g. `Error: ... 44saCk9...`) by analyzing context keywords.
-- 🎯 **100% Accuracy:** Verified against "Wild" stress tests including binary garbage, JSON nesting, and multilingual logs.
-- 🔍 **Deterministic Hashing:** Replaces secrets with unique hashes (e.g., `[HIDDEN:a1b2c]`), allowing QA to correlate errors without seeing the raw data.
-- 📦 **Drop-in:** No code changes required. Works with any language (Node, Python, Java, Go).
+- **High Performance:** Written in Go, designed for low-latency log processing.
+- **Context-Aware Entropy Analysis:** Detected high-entropy secrets even without keys (e.g. `Error: ... 44saCk9...`) by analyzing context keywords.
+- **100% Accuracy:** Verified against "Wild" stress tests including binary garbage, JSON nesting, and multilingual logs.
+- **Deterministic Hashing:** Replaces secrets with unique hashes (e.g., `[HIDDEN:a1b2c]`), allowing QA to correlate errors without seeing the raw data.
+- **Drop-in:** No code changes required. Works with any language (Node, Python, Java, Go).
 
-## 📥 Installation
+## Installation
 
 ### Docker
 Get the latest lightweight image from Docker Hub:
@@ -26,13 +26,13 @@ Get the latest lightweight image from Docker Hub:
 docker pull thelisdeep/pii-shield:latest
 ```
 
-## ⚙️ Configuration
+## Configuration
 See [CONFIGURATION.md](CONFIGURATION.md) for a full list of environment variables, including:
 - `PII_SALT`: Custom HMAC salt (Required for production).
 - `PII_ADAPTIVE_THRESHOLD`: Enable dynamic entropy baselines.
 - `PII_DISABLE_BIGRAM_CHECK`: Optimize for non-English logs.
 
-## ⚡ Quick Start
+## Quick Start
 1. Test Locally (CLI)
 You can pipe any log output through PII-Shield to see it in action immediately:
 
@@ -78,11 +78,11 @@ spec:
 ```
 
 
-## 🛡️ Verification
+## Verification
 This project is verified with a comprehensive suite:
 1. **Unit Tests**: Cover edge cases, multilingual support, and JSON integrity.
 2. **Fuzzing**: Native Go fuzzing ensures crash safety against invalid inputs.
 3. **Stress Testing**: `./full_stress_test.sh` validates 100% detection accuracy on mixed workloads.
 
-## 📜 License
+## License
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.
