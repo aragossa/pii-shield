@@ -4,8 +4,8 @@
 Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave the pod.
 
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
-![Docker Pulls](https://img.shields.io/docker/pulls/thelisdeep/pii-shield)
-![Go Report Card](https://goreportcard.com/badge/github.com/thelisdeep/pii-shield)
+![Docker Pulls](https://img.shields.io/docker/pulls/aragossa/pii-shield)
+![Go Report Card](https://goreportcard.com/badge/github.com/aragossa/pii-shield)
 
 ## Why PII-Shield?
 

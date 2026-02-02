@@ -1,3 +1,3 @@
-module github.com/pii-shield/algorythm
+module github.com/aragossa/pii-shield
 
 go 1.25
