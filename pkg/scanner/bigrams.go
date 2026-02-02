@@ -1,7 +1,21 @@
 package scanner
 
 // EnglishBigramFreqs contains log-probabilities of bigrams in English text.
-// Derived from standard corpus stats.
+// Derived from standard corpus statistics.
+//
+// LANGUAGE LIMITATION: This map is optimized for English text. Using this scanner
+// on non-English logs (German, Spanish, Chinese, etc.) or technical content (base64,
+// hex dumps) will result in higher false positive rates.
+//
+// CUSTOMIZATION: To support other languages, you have two options:
+// 1. Disable bigram checking entirely: Set PII_DISABLE_BIGRAM_CHECK=true
+// 2. Adjust the default score: Set PII_BIGRAM_DEFAULT_SCORE (e.g., -8.0 for stricter)
+//
+// Future versions may support custom bigram frequency maps for other languages.
+//
+// DISABLE: Set environment variable PII_DISABLE_BIGRAM_CHECK=true to disable
+// bigram analysis entirely. This will increase sensitivity but may also increase
+// false positives for common words.
 var EnglishBigramFreqs = map[string]float64{
 	"th": -3.5, "he": -3.8, "in": -3.9, "er": -4.0, "an": -4.1, "re": -4.1,
 	"nd": -4.3, "at": -4.4, "on": -4.4, "nt": -4.5, "ha": -4.5, "es": -4.6,
@@ -43,12 +57,16 @@ var EnglishBigramFreqs = map[string]float64{
 	"ey": -5.5,             
 }
 
+// GetBigramProb returns the log-probability for a given bigram.
+// If the bigram is not found in the English frequency map, returns the
+// configured default score (BigramDefaultScore, default -7.0).
+// Lower (more negative) values indicate rarer bigrams, which may suggest
+// non-English text or random/encoded data.
 func GetBigramProb(b string) float64 {
-    if v, ok := EnglishBigramFreqs[b]; ok {
-        return v
-    }
-    // If unknown, assume it's rare but not impossible.
-    // -7.0 allows a word with 1-2 unknown bigrams to still pass as English
-    // if the other bigrams are common.
-    return -7.0 
+	if v, ok := EnglishBigramFreqs[b]; ok {
+		return v
+	}
+	// Return configured default score instead of hardcoded -7.0
+	// This allows tuning for different language environments
+	return currentConfig.BigramDefaultScore
 }
