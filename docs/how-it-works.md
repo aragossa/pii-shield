@@ -4,6 +4,17 @@
 
 PII-Shield operates on a simple principle: **Intercept -> Analyze -> Redact -> Forward**.
 
+```mermaid
+graph LR
+    App[Application Pod] -- Raw Logs --> Sidecar(🛡️ PII-Shield)
+    Sidecar -- Clean JSON --> Agent[Log Agent]
+    Sidecar -- Redacted PII --> Trash((Discarded))
+    
+    style Sidecar fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b
+    style App fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style Agent fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+```
+
 ### 1. Entropy Analysis
 Regex rules miss things. Developers introduce new keys like `MY_NEW_TOKEN` that traditional filters ignore.
 
