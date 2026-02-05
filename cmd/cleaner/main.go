@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pii-shield/algorythm/pkg/scanner"
+	"github.com/aragossa/pii-shield/pkg/scanner"
 )
 
 func main() {
