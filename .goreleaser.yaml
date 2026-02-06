@@ -2,7 +2,8 @@
 project_name: pii-shield
 
 builds:
-  - env:
+  - main: ./cmd/cleaner
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
