@@ -1,31 +1,31 @@
 package scanner
 
 import (
-    "crypto/hmac"
-    "crypto/rand"
-    "crypto/sha256"
-    "encoding/hex"
-    "encoding/json"
-    "fmt"
-    "math"
-    "os"
-    "regexp"
-    "strings"
-    "sync"
-    "unicode"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"math"
+	"os"
+	"regexp"
+	"strings"
+	"sync"
+	"unicode"
 )
 
 // Config holds scanner configuration parameters.
 type Config struct {
-    EntropyThreshold        float64
-    MinSecretLength         int
-    Salt                    []byte
-    SensitiveKeys           []string
-    DisableBigramCheck      bool     // Disable English bigram analysis for non-English logs
-    BigramDefaultScore      float64  // Default score for unknown bigrams
-    AdaptiveThreshold       bool     // Enable statistical adaptive threshold mode
-    SensitiveKeyPatterns    []string // Regex patterns for sensitive key detection (stored as strings)
-    AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
+	EntropyThreshold        float64
+	MinSecretLength         int
+	Salt                    []byte
+	SensitiveKeys           []string
+	DisableBigramCheck      bool     // Disable English bigram analysis for non-English logs
+	BigramDefaultScore      float64  // Default score for unknown bigrams
+	AdaptiveThreshold       bool     // Enable statistical adaptive threshold mode
+	SensitiveKeyPatterns    []string // Regex patterns for sensitive key detection (stored as strings)
+	AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
 }
 
 var (
@@ -35,12 +35,12 @@ var (
 	sensitiveRegex *regexp.Regexp
 
 	logTable [256]float64
-    
-    bufferPool = sync.Pool{
-        New: func() interface{} {
-            return new(strings.Builder)
-        },
-    }
+
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			return new(strings.Builder)
+		},
+	}
 
 	// ContextKeywords trigger lower entropy thresholds for subsequent tokens
 	ContextKeywords = map[string]bool{
@@ -74,7 +74,7 @@ func init() {
 			// LIBRARY SAFETY: Don't panic in init(). Log error and use a fallback (with warning).
 			// In a real secure env, this should be monitored.
 			fmt.Fprintf(os.Stderr, "CRITICAL ERROR: Failed to generate secure random salt: %v. Using fallback salt.\n", err)
-			copy(salt, []byte("fallback-salt-2026-UNSAFE")) 
+			copy(salt, []byte("fallback-salt-2026-UNSAFE"))
 		}
 		currentConfig.Salt = salt
 	}
@@ -107,7 +107,7 @@ func init() {
 		}
 	}
 
-    	// Load Sensitive Keys
+	// Load Sensitive Keys
 	if envKeys := os.Getenv("PII_SENSITIVE_KEYS"); envKeys != "" {
 		currentConfig.SensitiveKeys = strings.Split(envKeys, ",")
 	} else {
@@ -132,7 +132,7 @@ func init() {
 				validPatterns = append(validPatterns, cleaned)
 			}
 		}
-		
+
 		if len(validPatterns) > 0 {
 			// Combine all patterns into one: (?i)(pat1|pat2|...)
 			combined := "(?i)(" + strings.Join(validPatterns, "|") + ")"
@@ -144,9 +144,9 @@ func init() {
 		}
 	}
 
-    for i := 1; i < 256; i++ {
-        logTable[i] = math.Log2(float64(i))
-    }
+	for i := 1; i < 256; i++ {
+		logTable[i] = math.Log2(float64(i))
+	}
 }
 
 // parseFloat parses a float from string, returns error if invalid
@@ -163,105 +163,119 @@ func parseInt(s string) (int, error) {
 	return result, err
 }
 
-
 // -----------------------------------------------------------------------------
 // 1. Core Entropy Logic
 // -----------------------------------------------------------------------------
 
 func CalculateComplexity(token string) float64 {
-    if len(token) == 0 {
-        return 0
-    }
+	if len(token) == 0 {
+		return 0
+	}
 
-    // 1. Shannon Entropy
-    entropy := calculateShannon(token)
+	// 1. Shannon Entropy
+	entropy := calculateShannon(token)
 
-    // 2. Class Bonus
-    bonus := calculateClassBonus(token)
+	// 2. Class Bonus
+	bonus := calculateClassBonus(token)
 
-    // 3. Bigram Check (English Likelihood)
-    bigramScore := calculateBigramAdjustment(token)
+	// 3. Bigram Check (English Likelihood)
+	bigramScore := calculateBigramAdjustment(token)
 
-    return entropy + bonus + bigramScore
+	return entropy + bonus + bigramScore
 }
 
 func calculateShannon(token string) float64 {
-    freq := make(map[rune]int)
-    totalChars := 0
-    for _, r := range token {
-        freq[r]++
-        totalChars++
-    }
+	freq := make(map[rune]int)
+	totalChars := 0
+	for _, r := range token {
+		freq[r]++
+		totalChars++
+	}
 
-    entropy := 0.0
-    logLen := math.Log2(float64(totalChars))
+	entropy := 0.0
+	logLen := math.Log2(float64(totalChars))
 
-    for _, count := range freq {
-        p := float64(count) / float64(totalChars)
-        entropy -= p * (math.Log2(float64(count)) - logLen)
-    }
-    return entropy
+	for _, count := range freq {
+		p := float64(count) / float64(totalChars)
+		entropy -= p * (math.Log2(float64(count)) - logLen)
+	}
+	return entropy
 }
 
 func calculateClassBonus(token string) float64 {
-    hasUpper := false
-    hasLower := false
-    hasDigit := false
-    hasSymbol := false
+	hasUpper := false
+	hasLower := false
+	hasDigit := false
+	hasSymbol := false
 
-    for _, r := range token {
-        if unicode.IsUpper(r) { hasUpper = true }
-        if unicode.IsLower(r) { hasLower = true }
-        if unicode.IsDigit(r) { hasDigit = true }
-        if unicode.IsPunct(r) || unicode.IsSymbol(r) { hasSymbol = true }
-    }
+	for _, r := range token {
+		if unicode.IsUpper(r) {
+			hasUpper = true
+		}
+		if unicode.IsLower(r) {
+			hasLower = true
+		}
+		if unicode.IsDigit(r) {
+			hasDigit = true
+		}
+		if unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			hasSymbol = true
+		}
+	}
 
-    classes := 0
-    if hasUpper { classes++ }
-    if hasLower { classes++ }
-    if hasDigit { classes++ }
-    if hasSymbol { classes++ }
+	classes := 0
+	if hasUpper {
+		classes++
+	}
+	if hasLower {
+		classes++
+	}
+	if hasDigit {
+		classes++
+	}
+	if hasSymbol {
+		classes++
+	}
 
-    if classes > 1 {
-        return float64(classes-1) * 0.5
-    }
-    return 0.0
+	if classes > 1 {
+		return float64(classes-1) * 0.5
+	}
+	return 0.0
 }
 
 func calculateBigramAdjustment(token string) float64 {
-    // CONDITIONAL: Can be disabled for non-English logs
-    if currentConfig.DisableBigramCheck || len(token) <= 3 {
-        return 0.0
-    }
+	// CONDITIONAL: Can be disabled for non-English logs
+	if currentConfig.DisableBigramCheck || len(token) <= 3 {
+		return 0.0
+	}
 
-    sumProb := 0.0
-    count := 0
-    sLower := strings.ToLower(token)
-    for i := 0; i < len(sLower)-1; i++ {
-        bg := sLower[i : i+2]
-        sumProb += GetBigramProb(bg) // Using exported map/func from bigrams.go
-        count++
-    }
-    
-    if count > 0 {
-        avgProb := sumProb / float64(count)
-        // If avgProb > -5.8, it's likely English or common text.
-        // We reduce complexity score to avoid false positives.
-        if avgProb > -5.8 { 
-             return -1.5 // Penalize score (make it "safer")
-        } else if avgProb < -7.0 {
-             return 0.5 // Boost score (more random)
-        }
-    }
-    return 0.0
+	sumProb := 0.0
+	count := 0
+	sLower := strings.ToLower(token)
+	for i := 0; i < len(sLower)-1; i++ {
+		bg := sLower[i : i+2]
+		sumProb += GetBigramProb(bg) // Using exported map/func from bigrams.go
+		count++
+	}
+
+	if count > 0 {
+		avgProb := sumProb / float64(count)
+		// If avgProb > -5.8, it's likely English or common text.
+		// We reduce complexity score to avoid false positives.
+		if avgProb > -5.8 {
+			return -1.5 // Penalize score (make it "safer")
+		} else if avgProb < -7.0 {
+			return 0.5 // Boost score (more random)
+		}
+	}
+	return 0.0
 }
 
-
 func redactWithHMAC(sensitiveData string) string {
-    mac := hmac.New(sha256.New, currentConfig.Salt)
-    mac.Write([]byte(sensitiveData))
-    hash := hex.EncodeToString(mac.Sum(nil))
-    return fmt.Sprintf("[HIDDEN:%s]", hash[:6])
+	mac := hmac.New(sha256.New, currentConfig.Salt)
+	mac.Write([]byte(sensitiveData))
+	hash := hex.EncodeToString(mac.Sum(nil))
+	return fmt.Sprintf("[HIDDEN:%s]", hash[:6])
 }
 
 // -----------------------------------------------------------------------------
@@ -269,47 +283,47 @@ func redactWithHMAC(sensitiveData string) string {
 // -----------------------------------------------------------------------------
 
 func ScanAndRedact(logLine string) string {
-    if len(logLine) == 0 {
-        return ""
-    }
+	if len(logLine) == 0 {
+		return ""
+	}
 
-    // Try robust JSON parsing first (Variant A from critique)
-    trimmed := strings.TrimSpace(logLine)
-    if strings.HasPrefix(trimmed, "{") {
-        if jsonProcessed, ok := processJSONLine(trimmed); ok {
-            return jsonProcessed
-        }
-    }
+	// Try robust JSON parsing first (Variant A from critique)
+	trimmed := strings.TrimSpace(logLine)
+	if strings.HasPrefix(trimmed, "{") {
+		if jsonProcessed, ok := processJSONLine(trimmed); ok {
+			return jsonProcessed
+		}
+	}
 
-    luhnRanges := FindLuhnSequences(logLine)
+	luhnRanges := FindLuhnSequences(logLine)
 
-    sb := bufferPool.Get().(*strings.Builder)
-    sb.Reset()
-    sb.Grow(len(logLine) + 100)
-    defer bufferPool.Put(sb)
+	sb := bufferPool.Get().(*strings.Builder)
+	sb.Reset()
+	sb.Grow(len(logLine) + 100)
+	defer bufferPool.Put(sb)
 
-    chunkStart := 0
+	chunkStart := 0
 
-    for _, lr := range luhnRanges {
-        if lr.Start > chunkStart {
-            safeSegment := logLine[chunkStart:lr.Start]
-            processed := scanSegment(safeSegment)
-            sb.WriteString(processed)
-        }
+	for _, lr := range luhnRanges {
+		if lr.Start > chunkStart {
+			safeSegment := logLine[chunkStart:lr.Start]
+			processed := scanSegment(safeSegment)
+			sb.WriteString(processed)
+		}
 
-        secret := logLine[lr.Start:lr.End]
-        sb.WriteString(redactWithHMAC(secret))
+		secret := logLine[lr.Start:lr.End]
+		sb.WriteString(redactWithHMAC(secret))
 
-        chunkStart = lr.End
-    }
+		chunkStart = lr.End
+	}
 
-    if chunkStart < len(logLine) {
-        safeSegment := logLine[chunkStart:]
-        processed := scanSegment(safeSegment)
-        sb.WriteString(processed)
-    }
+	if chunkStart < len(logLine) {
+		safeSegment := logLine[chunkStart:]
+		processed := scanSegment(safeSegment)
+		sb.WriteString(processed)
+	}
 
-    return sb.String()
+	return sb.String()
 }
 
 // scanSegment implements a Quote-Aware Tokenizer.
@@ -317,100 +331,101 @@ func ScanAndRedact(logLine string) string {
 // scanSegment implements a Context-Aware & Quote-Aware Tokenizer.
 // It handles: escaped quotes, spaces, and sensitive key tracking.
 func scanSegment(segment string) string {
-    var sb strings.Builder
-    runes := []rune(segment)
-    n := len(runes)
-    
-    start := 0
-    inQuote := false
-    quoteChar := rune(0)
-    
-    // Context State
-    pendingKeySensitive := false
-    pendingContextSensitive := false // NEW: For "Error: secret"
-    isInValuePos := false // Tracks if we are physically after a ':' or '=' separator
-    
-    isSep := func(r rune) bool {
-        return strings.ContainsRune(" \t,;[]{}()<>", r)
-    }
+	var sb strings.Builder
+	runes := []rune(segment)
+	n := len(runes)
 
-    for i := 0; i <= n; i++ {
-        // Handle end of string
-        if i == n {
-            if start < n {
-                token := string(runes[start:n])
-                // Process final token
-                processed, isKey := processTokenLogic(token, pendingKeySensitive, pendingContextSensitive, isInValuePos)
-                sb.WriteString(processed)
-                if isKey { /* No next token, so irrelevant */ }
-            }
-            break
-        }
-        
-        r := runes[i]
-        
-        // Quote Handling with Escape
-        if inQuote {
-            if r == '\\' {
-                // Skip next char (escape)
-                if i+1 < n {
-                    i++ 
-                }
-                continue
-            }
-            if r == quoteChar {
-                inQuote = false
-            }
-            continue
-        }
-        
-        if r == '"' || r == '\'' {
-            inQuote = true
-            quoteChar = r
-            continue
-        }
+	start := 0
+	inQuote := false
+	quoteChar := rune(0)
 
-        if isSep(r) {
-            if i > start {
-                token := string(runes[start:i])
-                processed, isKey := processTokenLogic(token, pendingKeySensitive, pendingContextSensitive, isInValuePos)
-                sb.WriteString(processed)
-                
-                // Update Context
-                if isKey {
-                    pendingKeySensitive = true
-                    pendingContextSensitive = false
-                } else {
-                     if isInValuePos {
-                         pendingKeySensitive = false
-                     }
-                }
+	// Context State
+	pendingKeySensitive := false
+	pendingContextSensitive := false // NEW: For "Error: secret"
+	isInValuePos := false            // Tracks if we are physically after a ':' or '=' separator
 
-                // Track Separator Tokens explicitly
-                // If token was ":", ",", "=", we are in Value Pos context changes
-                trimmed := strings.TrimSpace(token)
-                
-                     // Check if this token is a Context Keyword (e.g. "Error", "Failed")
-                     lower := strings.ToLower(trimmed)
-                     if ContextKeywords[lower] {
-                         pendingContextSensitive = true
-                     } else {
-                         pendingContextSensitive = false
-                     }
+	isSep := func(r rune) bool {
+		return strings.ContainsRune(" \t,;[]{}()<>", r)
+	}
 
-                if trimmed == ":" || trimmed == "=" {
-                    isInValuePos = true
-                } else if trimmed != "" {
-                    // Reset if it was a normal token (key or value)
-                    isInValuePos = false
-                }
-            }
-            sb.WriteRune(r)
-            start = i + 1
-        }
-    }
-    
-    return sb.String()
+	for i := 0; i <= n; i++ {
+		// Handle end of string
+		if i == n {
+			if start < n {
+				token := string(runes[start:n])
+				// Process final token
+				processed, isKey := processTokenLogic(token, pendingKeySensitive, pendingContextSensitive, isInValuePos)
+				sb.WriteString(processed)
+				if isKey { /* No next token, so irrelevant */
+				}
+			}
+			break
+		}
+
+		r := runes[i]
+
+		// Quote Handling with Escape
+		if inQuote {
+			if r == '\\' {
+				// Skip next char (escape)
+				if i+1 < n {
+					i++
+				}
+				continue
+			}
+			if r == quoteChar {
+				inQuote = false
+			}
+			continue
+		}
+
+		if r == '"' || r == '\'' {
+			inQuote = true
+			quoteChar = r
+			continue
+		}
+
+		if isSep(r) {
+			if i > start {
+				token := string(runes[start:i])
+				processed, isKey := processTokenLogic(token, pendingKeySensitive, pendingContextSensitive, isInValuePos)
+				sb.WriteString(processed)
+
+				// Update Context
+				if isKey {
+					pendingKeySensitive = true
+					pendingContextSensitive = false
+				} else {
+					if isInValuePos {
+						pendingKeySensitive = false
+					}
+				}
+
+				// Track Separator Tokens explicitly
+				// If token was ":", ",", "=", we are in Value Pos context changes
+				trimmed := strings.TrimSpace(token)
+
+				// Check if this token is a Context Keyword (e.g. "Error", "Failed")
+				lower := strings.ToLower(trimmed)
+				if ContextKeywords[lower] {
+					pendingContextSensitive = true
+				} else {
+					pendingContextSensitive = false
+				}
+
+				if trimmed == ":" || trimmed == "=" {
+					isInValuePos = true
+				} else if trimmed != "" {
+					// Reset if it was a normal token (key or value)
+					isInValuePos = false
+				}
+			}
+			sb.WriteRune(r)
+			start = i + 1
+		}
+	}
+
+	return sb.String()
 }
 
 // processTokenLogic analyzes a token and returns (processedString, isSensitiveKey).
@@ -418,152 +433,157 @@ func scanSegment(segment string) string {
 // contextSensitive: if true, reduce entropy threshold (Context Aware).
 // isValuePos: if true, this token MUST be a value (skiye key checks).
 func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive bool, isValuePos bool) (string, bool) {
-    // 0. URLs First
-    if strings.Contains(rawToken, "://") {
-        return maskURLParameters(rawToken), false
-    }
+	// 0. URLs First
+	if strings.Contains(rawToken, "://") {
+		return maskURLParameters(rawToken), false
+	}
 
-    // 1. Check for Key=Value
-    if strings.ContainsRune(rawToken, '=') {
-        // Handle quoted strings: "key=value"
-        if strings.HasPrefix(rawToken, "\"") || strings.HasPrefix(rawToken, "'") {
-             quote := string(rawToken[0])
-             trimmed := trimQuotes(rawToken)
-             
-             if strings.Contains(trimmed, "=") {
-                 parts := strings.SplitN(trimmed, "=", 2)
-                 key := parts[0]
-                 val := parts[1]
-                 
-                 keySensitive := isSensitiveKey(key)
-                 
-                 var processedVal string
-                 if keySensitive {
-                     processedVal = processSingleToken(val, val, true, false)
-                 } else {
-                     // Recursive scan for non-sensitive keys (e.g. "data=key=val")
-                     processedVal = ScanAndRedact(val)
-                 }
-                 
-                 return quote + key + "=" + processedVal + quote, keySensitive
-             }
-             // Fallthrough to single token processing
-        } else {
-            // Unquoted Key=Value
-            parts := strings.SplitN(rawToken, "=", 2)
-            key := parts[0]
-            val := parts[1]
-            keySensitive := isSensitiveKey(key)
-            var processedVal string
-            if keySensitive {
-                 processedVal = processSingleToken(val, val, true, false)
-            } else {
-                 processedVal = ScanAndRedact(val)
-            }
-            return key + "=" + processedVal, keySensitive
-        }
-    }
-    
-    // 2. Handle key:value
-    if strings.ContainsRune(rawToken, ':') && !strings.Contains(rawToken, "://") {
-         if isImage(rawToken) {
-             return rawToken, false
-         }
-         parts := strings.SplitN(rawToken, ":", 2)
-         if len(parts) == 2 {
-             key := parts[0]
-             val := parts[1]
-             keySensitive := isSensitiveKey(key)
-             
-             // Recursively process val? Val might be empty if "key:"
-             if val == "" {
-                 return rawToken, keySensitive
-             }
-             processedVal := processSingleToken(val, val, keySensitive, false)
-             return key + ":" + processedVal, keySensitive 
-         }
-    }
-    
-    // 3. URLs
-    // Moved to TOP to prevent "key=value" logic from splitting URLs like "jdbc:mysql://...?pass=secret"
-    if strings.Contains(rawToken, "://") {
-        return maskURLParameters(rawToken), false
-    }
+	// 1. Check for Key=Value
+	if strings.ContainsRune(rawToken, '=') {
+		// Handle quoted strings: "key=value"
+		if strings.HasPrefix(rawToken, "\"") || strings.HasPrefix(rawToken, "'") {
+			quote := string(rawToken[0])
+			trimmed := trimQuotes(rawToken)
 
-    // 1. Check for Key=Value
+			if strings.Contains(trimmed, "=") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				key := parts[0]
+				val := parts[1]
 
-    // 4. Single Token parsing (Value or Key)
-    // If quote-trimmed version matches a Key, return isKey=true
-    trimmed := trimQuotes(rawToken) 
-    
-    // CRITICAL FIX: If we know we are in a Value position (e.g. after :), 
-    // do NOT treat this as a key, even if it looks like one.
-    if !isValuePos {
-        if isSensitiveKey(trimmed) {
-            return rawToken, true
-        }
-    }
-    
-    // Not a key. Process as value.
-    // If forcedSensitive is true (from context), we use strict redaction.
-    // JSON CORRUPTION FIX: If original token was quoted, we must preserve quotes if redacted
-    processed := processSingleToken(trimmed, rawToken, forcedSensitive, contextSensitive)
-    
-    if processed != trimmed && strings.HasPrefix(processed, "[HIDDEN:") {
-         // It was redacted. If input was quoted, re-wrap it.
-         if strings.HasPrefix(rawToken, "\"") && strings.HasSuffix(rawToken, "\"") {
-             return "\"" + processed + "\"", false
-         }
-         if strings.HasPrefix(rawToken, "'") && strings.HasSuffix(rawToken, "'") {
-             return "'" + processed + "'", false
-         }
-         
-         // Fix for JSON Integers/Bools: If we redact a number/bool that wasn't quoted, we MUST quote it
-         // to avoid invalid JSON (e.g. id: [HIDDEN] invalid, id: "[HIDDEN]" valid).
-         lower := strings.ToLower(trimmed)
-         if isDigits(trimmed) || lower == "true" || lower == "false" || lower == "null" {
-             return "\"" + processed + "\"", false
-         }
-    }
+				keySensitive := isSensitiveKey(key)
 
-    return processed, false
+				var processedVal string
+				if keySensitive {
+					processedVal = processSingleToken(val, val, true, false)
+				} else {
+					// Recursive scan for non-sensitive keys (e.g. "data=key=val")
+					processedVal = ScanAndRedact(val)
+				}
+
+				return quote + key + "=" + processedVal + quote, keySensitive
+			}
+			// Fallthrough to single token processing
+		} else {
+			// Unquoted Key=Value
+			parts := strings.SplitN(rawToken, "=", 2)
+			key := parts[0]
+			val := parts[1]
+			keySensitive := isSensitiveKey(key)
+			var processedVal string
+			if keySensitive {
+				processedVal = processSingleToken(val, val, true, false)
+			} else {
+				processedVal = ScanAndRedact(val)
+			}
+			return key + "=" + processedVal, keySensitive
+		}
+	}
+
+	// 2. Handle key:value
+	if strings.ContainsRune(rawToken, ':') && !strings.Contains(rawToken, "://") {
+		if isImage(rawToken) {
+			return rawToken, false
+		}
+		parts := strings.SplitN(rawToken, ":", 2)
+		if len(parts) == 2 {
+			key := parts[0]
+			val := parts[1]
+			keySensitive := isSensitiveKey(key)
+
+			// Recursively process val? Val might be empty if "key:"
+			if val == "" {
+				return rawToken, keySensitive
+			}
+			processedVal := processSingleToken(val, val, keySensitive, false)
+			return key + ":" + processedVal, keySensitive
+		}
+	}
+
+	// 3. URLs
+	// Moved to TOP to prevent "key=value" logic from splitting URLs like "jdbc:mysql://...?pass=secret"
+	if strings.Contains(rawToken, "://") {
+		return maskURLParameters(rawToken), false
+	}
+
+	// 1. Check for Key=Value
+
+	// 4. Single Token parsing (Value or Key)
+	// If quote-trimmed version matches a Key, return isKey=true
+	trimmed := trimQuotes(rawToken)
+
+	// CRITICAL FIX: If we know we are in a Value position (e.g. after :),
+	// do NOT treat this as a key, even if it looks like one.
+	if !isValuePos {
+		if isSensitiveKey(trimmed) {
+			return rawToken, true
+		}
+	}
+
+	// Not a key. Process as value.
+	// If forcedSensitive is true (from context), we use strict redaction.
+	// JSON CORRUPTION FIX: If original token was quoted, we must preserve quotes if redacted
+	processed := processSingleToken(trimmed, rawToken, forcedSensitive, contextSensitive)
+
+	if processed != trimmed && strings.HasPrefix(processed, "[HIDDEN:") {
+		// It was redacted. If input was quoted, re-wrap it.
+		if strings.HasPrefix(rawToken, "\"") && strings.HasSuffix(rawToken, "\"") {
+			return "\"" + processed + "\"", false
+		}
+		if strings.HasPrefix(rawToken, "'") && strings.HasSuffix(rawToken, "'") {
+			return "'" + processed + "'", false
+		}
+
+		// Fix for JSON Integers/Bools: If we redact a number/bool that wasn't quoted, we MUST quote it
+		// to avoid invalid JSON (e.g. id: [HIDDEN] invalid, id: "[HIDDEN]" valid).
+		lower := strings.ToLower(trimmed)
+		if isDigits(trimmed) || lower == "true" || lower == "false" || lower == "null" {
+			return "\"" + processed + "\"", false
+		}
+	}
+
+	return processed, false
 }
 
-
 func trimQuotes(s string) string {
-    if len(s) < 2 { return s }
-    if s[0] == '"' && s[len(s)-1] == '"' { return s[1:len(s)-1] }
-    if s[0] == '\'' && s[len(s)-1] == '\'' { return s[1:len(s)-1] }
-    return s
+	if len(s) < 2 {
+		return s
+	}
+	if s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	if s[0] == '\'' && s[len(s)-1] == '\'' {
+		return s[1 : len(s)-1]
+	}
+	return s
 }
 
 func processSingleToken(content, original string, forcedSensitive bool, contextSensitive bool) string {
-    
-    // 0. Safety Whitelists
-    if isSafe(content) {
-        return original
-    }
 
-    // 1. Heuristics Check (Length & Spaces)
-    if !forcedSensitive {
-        if len(content) < currentConfig.MinSecretLength {
-            return original
-        }
-        // Avoid redacting sentences or multi-word phrases
-        if strings.Contains(content, " ") {
-            return original
-        }
-    }
+	// 0. Safety Whitelists
+	if isSafe(content) {
+		return original
+	}
 
-    // 2. Complexity Score
-    score := CalculateComplexity(content)
-    
+	// 1. Heuristics Check (Length & Spaces)
+	if !forcedSensitive {
+		if len(content) < currentConfig.MinSecretLength {
+			return original
+		}
+		// Avoid redacting sentences or multi-word phrases
+		if strings.Contains(content, " ") {
+			return original
+		}
+	}
+
+	// 2. Complexity Score
+	score := CalculateComplexity(content)
+
 	threshold := currentConfig.EntropyThreshold
 	if forcedSensitive {
 		threshold = 1.0
-    } else if contextSensitive {
-        // CONTEXT BOOST: If keyword was previous, lower threshold slightly
-        threshold -= 1.3 // e.g. 3.8 -> 2.5. Catches medium/high entropy.
+	} else if contextSensitive {
+		// CONTEXT BOOST: If keyword was previous, lower threshold slightly
+		threshold -= 1.3 // e.g. 3.8 -> 2.5. Catches medium/high entropy.
 	} else if currentConfig.AdaptiveThreshold {
 		// Use adaptive threshold if baseline is ready
 		if adaptiveThreshold, ready := globalBaseline.GetThreshold(); ready {
@@ -571,9 +591,9 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 		}
 	}
 
-    if score > threshold {
-        return redactWithHMAC(content)
-    }
+	if score > threshold {
+		return redactWithHMAC(content)
+	}
 
 	// Token is considered SAFE. Now we can safely update the baseline.
 	// This prevents "poisoning" the stats with secrets.
@@ -581,22 +601,20 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 		globalBaseline.Update(score)
 	}
 
-    return original
+	return original
 }
-
-
 
 func isSensitiveKey(key string) bool {
 	// 1. Check substring matching (fast path for standard keys)
-	// We still need ToLower for the fixed list unless we change that too, 
-	// but let's keep it for backward compatibility and as a "fast filter" 
+	// We still need ToLower for the fixed list unless we change that too,
+	// but let's keep it for backward compatibility and as a "fast filter"
 	// before the regex if possible? No, user said ToLower is slow.
-	// But currentConfig.SensitiveKeys are lowercase. 
-	// Optimization: If we trust the regex is case-insensitive, we can skip ToLower 
+	// But currentConfig.SensitiveKeys are lowercase.
+	// Optimization: If we trust the regex is case-insensitive, we can skip ToLower
 	// for the specific regex check. For the list check, we still need it.
 	// However, if we move ALL keys to regex, that would be fastest.
 	// For now, let's keep the hybrid approach but optimize the Regex part.
-	
+
 	k := strings.ToLower(key)
 
 	// Check substring matching (backward compatible)
@@ -607,8 +625,8 @@ func isSensitiveKey(key string) bool {
 	}
 
 	// 2. Check compiled regex (single pass, case-insensitive)
-	// sensitiveRegex is already (?i), so we match against original 'key' 
-	// to avoid relying on 'k' (result of ToLower) if we want? 
+	// sensitiveRegex is already (?i), so we match against original 'key'
+	// to avoid relying on 'k' (result of ToLower) if we want?
 	// Actually 'key' is fine.
 	if sensitiveRegex != nil {
 		if sensitiveRegex.MatchString(key) {
@@ -620,186 +638,191 @@ func isSensitiveKey(key string) bool {
 }
 
 func maskURLParameters(url string) string {
-    parts := strings.Split(url, "?")
-    if len(parts) < 2 {
-        return url
-    }
-    
-    baseUrl := parts[0]
-    query := parts[1]
-    
-    params := strings.Split(query, "&")
-    var sb strings.Builder
-    sb.WriteString(baseUrl)
-    sb.WriteRune('?')
-    
-    for i, param := range params {
-        if i > 0 { sb.WriteRune('&') }
-        
-        if strings.Contains(param, "=") {
-            kv := strings.SplitN(param, "=", 2)
-            key := kv[0]
-            val := kv[1]
-            
-            if isSensitiveKey(key) {
-                sb.WriteString(key)
-                sb.WriteRune('=')
-                sb.WriteString(redactWithHMAC(val))
-            } else {
-                score := CalculateComplexity(val)
-                if score > currentConfig.EntropyThreshold {
-                     sb.WriteString(key)
-                     sb.WriteRune('=')
-                     sb.WriteString(redactWithHMAC(val))
-                } else {
-                     sb.WriteString(param)
-                }
-            }
-        } else {
-            sb.WriteString(param)
-        }
-    }
-    return sb.String()
-}
+	parts := strings.Split(url, "?")
+	if len(parts) < 2 {
+		return url
+	}
 
+	baseUrl := parts[0]
+	query := parts[1]
+
+	params := strings.Split(query, "&")
+	var sb strings.Builder
+	sb.WriteString(baseUrl)
+	sb.WriteRune('?')
+
+	for i, param := range params {
+		if i > 0 {
+			sb.WriteRune('&')
+		}
+
+		if strings.Contains(param, "=") {
+			kv := strings.SplitN(param, "=", 2)
+			key := kv[0]
+			val := kv[1]
+
+			if isSensitiveKey(key) {
+				sb.WriteString(key)
+				sb.WriteRune('=')
+				sb.WriteString(redactWithHMAC(val))
+			} else {
+				score := CalculateComplexity(val)
+				if score > currentConfig.EntropyThreshold {
+					sb.WriteString(key)
+					sb.WriteRune('=')
+					sb.WriteString(redactWithHMAC(val))
+				} else {
+					sb.WriteString(param)
+				}
+			}
+		} else {
+			sb.WriteString(param)
+		}
+	}
+	return sb.String()
+}
 
 // -----------------------------------------------------------------------------
 // Safety Whitelists
 // -----------------------------------------------------------------------------
 
 func isSafe(token string) bool {
-    // Note: URL check moved up to processTokenLogic to handle masking.
-    
-    // URL / Protocol (Fallback only)
-    if strings.Contains(token, "://") {
-        return true
-    }
-    
-    // UUID
-    if isUUID(token) {
-        return true
-    }
+	// Note: URL check moved up to processTokenLogic to handle masking.
 
-    // IPv6 (Simple heuristic)
-    if strings.Count(token, ":") >= 2 {
-        isIPv6 := true
-        for _, r := range token {
-             if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') || r == ':') {
-                isIPv6 = false
-                break
-            }
-        }
-        if isIPv6 {
-            return true
-        }
-    }
-    
-    // Timestamps
-    if isTimestamp(token) {
-        return true
-    }
-    
-    // Docker Images / File Paths
-    if isImage(token) {
-        return true
-    }
-    
-    // Paths (Safe start)
-    if strings.HasPrefix(token, "/") || strings.HasPrefix(token, "./") || strings.HasPrefix(token, "../") {
-        return true
-    }
-    
-    // Git Object Hash (40 hex chars)
-    if len(token) == 40 && isHexStr(token) {
-        return true
-    }
-    
-    // MongoDB ObjectID (24 hex chars)
-    if len(token) == 24 && isHexStr(token) {
-        return true
-    }
-    
-    // SSH Public Key (starts with ssh-rsa, ssh-ed25519)
-    if strings.HasPrefix(token, "ssh-") {
-        return true
-    }
+	// URL / Protocol (Fallback only)
+	if strings.Contains(token, "://") {
+		return true
+	}
 
-    // SSH Public Key Body (starts with AAAA, high entropy, base64)
-    if strings.HasPrefix(token, "AAAA") && len(token) > 20 {
-         // Minimal Base64 check (just charset)
-         isBase64 := true
-         for _, r := range token {
-             if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '+' || r == '/' || r == '=') {
-                 isBase64 = false
-                 break
-             }
-         }
-         if isBase64 {
-             return true
-         }
-    }
+	// UUID
+	if isUUID(token) {
+		return true
+	}
 
-    // Generated Usernames (user_xxxx)
-    if strings.HasPrefix(token, "user_") {
-        // Safe if rest is just hex/digits/alpha and reasonable length
-        rest := token[5:]
-        if len(rest) > 0 && len(rest) < 12 {
-             isSafeUser := true
-             for _, r := range rest {
-                 if !isHex(r) && r != '_' { // Hex + maybe underscore?
-                     isSafeUser = false
-                     break
-                 }
-             }
-             if isSafeUser { return true }
-        }
-    }
+	// IPv6 (Simple heuristic)
+	if strings.Count(token, ":") >= 2 {
+		isIPv6 := true
+		for _, r := range token {
+			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') || r == ':') {
+				isIPv6 = false
+				break
+			}
+		}
+		if isIPv6 {
+			return true
+		}
+	}
 
-    return false
+	// Timestamps
+	if isTimestamp(token) {
+		return true
+	}
+
+	// Docker Images / File Paths
+	if isImage(token) {
+		return true
+	}
+
+	// Paths (Safe start)
+	if strings.HasPrefix(token, "/") || strings.HasPrefix(token, "./") || strings.HasPrefix(token, "../") {
+		return true
+	}
+
+	// Git Object Hash (40 hex chars)
+	if len(token) == 40 && isHexStr(token) {
+		return true
+	}
+
+	// MongoDB ObjectID (24 hex chars)
+	if len(token) == 24 && isHexStr(token) {
+		return true
+	}
+
+	// SSH Public Key (starts with ssh-rsa, ssh-ed25519)
+	if strings.HasPrefix(token, "ssh-") {
+		return true
+	}
+
+	// SSH Public Key Body (starts with AAAA, high entropy, base64)
+	if strings.HasPrefix(token, "AAAA") && len(token) > 20 {
+		// Minimal Base64 check (just charset)
+		isBase64 := true
+		for _, r := range token {
+			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '+' || r == '/' || r == '=') {
+				isBase64 = false
+				break
+			}
+		}
+		if isBase64 {
+			return true
+		}
+	}
+
+	// Generated Usernames (user_xxxx)
+	if strings.HasPrefix(token, "user_") {
+		// Safe if rest is just hex/digits/alpha and reasonable length
+		rest := token[5:]
+		if len(rest) > 0 && len(rest) < 12 {
+			isSafeUser := true
+			for _, r := range rest {
+				if !isHex(r) && r != '_' { // Hex + maybe underscore?
+					isSafeUser = false
+					break
+				}
+			}
+			if isSafeUser {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func isHexStr(s string) bool {
-    for _, r := range s {
-        if !isHex(r) { return false }
-    }
-    return true
+	for _, r := range s {
+		if !isHex(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func isTimestamp(token string) bool {
-    // Unix Timestamp (10 digits, starts with 17.., 18.., 2...)
-    // 1700000000 is year 2023. ~2033 is 2000000000.
-    // Check if pure digits and length 10.
-    if len(token) == 10 && isDigits(token) {
-        return true // Accept all 10 digit numbers as potential timestamps? (Might be safe ID, or Account No)
-        // If strict, check starts.
-        // But wait, Account numbers > 8 length might be secrets.
-        // Unix Timestamp context is usually "time=170..." or "ts": 170...
-        // Let's be slightly specific, 17, 18.
-        if strings.HasPrefix(token, "17") || strings.HasPrefix(token, "18") {
-             return true 
-        }
-    }
-    
-    // ISO8601 / RFC3339
-    // 2026-01-30...
-    // Req: Start with 4 digits, then -, then 2 digits.
-    if len(token) >= 10 {
-        if isDigits(token[0:4]) && token[4] == '-' && isDigits(token[5:7]) && token[7] == '-' {
-            return true
-        }
-    }
-    return false
+	// Unix Timestamp (10 digits, starts with 17.., 18.., 2...)
+	// 1700000000 is year 2023. ~2033 is 2000000000.
+	// Check if pure digits and length 10.
+	if len(token) == 10 && isDigits(token) {
+		return true // Accept all 10 digit numbers as potential timestamps? (Might be safe ID, or Account No)
+		// If strict, check starts.
+		// But wait, Account numbers > 8 length might be secrets.
+		// Unix Timestamp context is usually "time=170..." or "ts": 170...
+		// Let's be slightly specific, 17, 18.
+		if strings.HasPrefix(token, "17") || strings.HasPrefix(token, "18") {
+			return true
+		}
+	}
+
+	// ISO8601 / RFC3339
+	// 2026-01-30...
+	// Req: Start with 4 digits, then -, then 2 digits.
+	if len(token) >= 10 {
+		if isDigits(token[0:4]) && token[4] == '-' && isDigits(token[5:7]) && token[7] == '-' {
+			return true
+		}
+	}
+	return false
 }
 
 func isImage(token string) bool {
-    // common docker registries or image formats
-    // e.g. docker.io/..., library/..., gcr.io/...
-    if strings.Contains(token, "docker.io") || strings.Contains(token, "gcr.io") || strings.Contains(token, "quay.io") {
-        return true
-    }
-    // common image extensions? not usually in logs unless URL.
-    // common structure "name:tag" where name is alpha.
-    return false 
+	// common docker registries or image formats
+	// e.g. docker.io/..., library/..., gcr.io/...
+	if strings.Contains(token, "docker.io") || strings.Contains(token, "gcr.io") || strings.Contains(token, "quay.io") {
+		return true
+	}
+	// common image extensions? not usually in logs unless URL.
+	// common structure "name:tag" where name is alpha.
+	return false
 }
 
 // -----------------------------------------------------------------------------
@@ -807,128 +830,158 @@ func isImage(token string) bool {
 // -----------------------------------------------------------------------------
 
 type Range struct {
-    Start, End int 
+	Start, End int
 }
 
 func FindLuhnSequences(line string) []Range {
-    var ranges []Range
-    n := len(line)
-    if n < 13 { return ranges }
+	var ranges []Range
+	n := len(line)
+	if n < 13 {
+		return ranges
+	}
 
-    var digitIndices []int
-    for i, r := range line {
-        if unicode.IsDigit(r) {
-            digitIndices = append(digitIndices, i)
-        }
-    }
+	var digitIndices []int
+	for i, r := range line {
+		if unicode.IsDigit(r) {
+			digitIndices = append(digitIndices, i)
+		}
+	}
 
-    numDigits := len(digitIndices)
-    if numDigits < 13 { return ranges }
+	numDigits := len(digitIndices)
+	if numDigits < 13 {
+		return ranges
+	}
 
-    for i := 0; i <= numDigits-13; i++ {
-        maxLen := 19
-        if i+maxLen > numDigits { maxLen = numDigits - i }
+	for i := 0; i <= numDigits-13; i++ {
+		maxLen := 19
+		if i+maxLen > numDigits {
+			maxLen = numDigits - i
+		}
 
-        for L := 13; L <= maxLen; L++ {
-            startIdx := digitIndices[i]
-            endIdx := digitIndices[i+L-1] + 1
-            
-            connected := true
-            for k := 1; k < L; k++ {
-                currIdx := digitIndices[i+k]
-                prevIdx := digitIndices[i+k-1]
-                diff := currIdx - prevIdx
-                
-                if diff > 2 { connected = false; break }
-                if diff == 2 {
-                    sep := line[prevIdx+1]
-                    if sep != ' ' && sep != '-' { connected = false; break }
-                }
-            }
-            if !connected { continue }
-            
-            // BOUNDARY CHECK: Ensure we are not inside a word or larger number
-            if startIdx > 0 {
-                r := rune(line[startIdx-1])
-                if unicode.IsLetter(r) || unicode.IsDigit(r) { continue }
-                // UUID/Alphanumeric check: if separator is '-', check prev char
-                if r == '-' || r == '.' {
-                    if startIdx > 1 {
-                         r2 := rune(line[startIdx-2])
-                         if unicode.IsLetter(r2) { continue }
-                    }
-                }
-            }
-            if endIdx < len(line) {
-                r := rune(line[endIdx])
-                if unicode.IsLetter(r) || unicode.IsDigit(r) { continue }
-                // UUID/Alphanumeric check: if separator is '-', check next char
-                if r == '-' || r == '.' {
-                    if endIdx+1 < len(line) {
-                         r2 := rune(line[endIdx+1])
-                         if unicode.IsLetter(r2) { continue }
-                    }
-                }
-            }
+		for L := 13; L <= maxLen; L++ {
+			startIdx := digitIndices[i]
+			endIdx := digitIndices[i+L-1] + 1
 
-            if countDistinctDigits(line, digitIndices[i:i+L]) < 4 { continue }
-            
-            if validLuhnFromIndices(line, digitIndices[i:i+L]) {
-                ranges = append(ranges, Range{Start: startIdx, End: endIdx})
-            }
-        }
-    }
-    return mergeRanges(ranges)
+			connected := true
+			for k := 1; k < L; k++ {
+				currIdx := digitIndices[i+k]
+				prevIdx := digitIndices[i+k-1]
+				diff := currIdx - prevIdx
+
+				if diff > 2 {
+					connected = false
+					break
+				}
+				if diff == 2 {
+					sep := line[prevIdx+1]
+					if sep != ' ' && sep != '-' {
+						connected = false
+						break
+					}
+				}
+			}
+			if !connected {
+				continue
+			}
+
+			// BOUNDARY CHECK: Ensure we are not inside a word or larger number
+			if startIdx > 0 {
+				r := rune(line[startIdx-1])
+				if unicode.IsLetter(r) || unicode.IsDigit(r) {
+					continue
+				}
+				// UUID/Alphanumeric check: if separator is '-', check prev char
+				if r == '-' || r == '.' {
+					if startIdx > 1 {
+						r2 := rune(line[startIdx-2])
+						if unicode.IsLetter(r2) {
+							continue
+						}
+					}
+				}
+			}
+			if endIdx < len(line) {
+				r := rune(line[endIdx])
+				if unicode.IsLetter(r) || unicode.IsDigit(r) {
+					continue
+				}
+				// UUID/Alphanumeric check: if separator is '-', check next char
+				if r == '-' || r == '.' {
+					if endIdx+1 < len(line) {
+						r2 := rune(line[endIdx+1])
+						if unicode.IsLetter(r2) {
+							continue
+						}
+					}
+				}
+			}
+
+			if countDistinctDigits(line, digitIndices[i:i+L]) < 4 {
+				continue
+			}
+
+			if validLuhnFromIndices(line, digitIndices[i:i+L]) {
+				ranges = append(ranges, Range{Start: startIdx, End: endIdx})
+			}
+		}
+	}
+	return mergeRanges(ranges)
 }
 
 func countDistinctDigits(line string, indices []int) int {
-    seen := 0
-    mask := 0
-    for _, idx := range indices {
-        d := int(line[idx] - '0')
-        // Safety bound check
-        if d >= 0 && d <= 9 {
-             if (mask & (1 << d)) == 0 {
-                mask |= (1 << d)
-                seen++
-             }
-        }
-    }
-    return seen
+	seen := 0
+	mask := 0
+	for _, idx := range indices {
+		d := int(line[idx] - '0')
+		// Safety bound check
+		if d >= 0 && d <= 9 {
+			if (mask & (1 << d)) == 0 {
+				mask |= (1 << d)
+				seen++
+			}
+		}
+	}
+	return seen
 }
 
 func validLuhnFromIndices(line string, indices []int) bool {
-    n := len(indices)
-    sum := 0
-    alternate := false
-    for i := n - 1; i >= 0; i-- {
-        r := line[indices[i]]
-        digit := int(r - '0')
-        if alternate {
-            digit *= 2
-            if digit > 9 { digit -= 9 }
-        }
-        sum += digit
-        alternate = !alternate
-    }
-    return sum%10 == 0
+	n := len(indices)
+	sum := 0
+	alternate := false
+	for i := n - 1; i >= 0; i-- {
+		r := line[indices[i]]
+		digit := int(r - '0')
+		if alternate {
+			digit *= 2
+			if digit > 9 {
+				digit -= 9
+			}
+		}
+		sum += digit
+		alternate = !alternate
+	}
+	return sum%10 == 0
 }
 
 func mergeRanges(ranges []Range) []Range {
-    if len(ranges) == 0 { return ranges }
-    var merged []Range
-    current := ranges[0]
-    for i := 1; i < len(ranges); i++ {
-        next := ranges[i]
-        if next.Start <= current.End {
-            if next.End > current.End { current.End = next.End }
-        } else {
-            merged = append(merged, current)
-            current = next
-        }
-    }
-    merged = append(merged, current)
-    return merged
+	if len(ranges) == 0 {
+		return ranges
+	}
+	var merged []Range
+	current := ranges[0]
+	for i := 1; i < len(ranges); i++ {
+		next := ranges[i]
+		if next.Start <= current.End {
+			if next.End > current.End {
+				current.End = next.End
+			}
+		} else {
+			merged = append(merged, current)
+			current = next
+		}
+	}
+	merged = append(merged, current)
+	return merged
 }
 
 // -----------------------------------------------------------------------------
@@ -936,25 +989,36 @@ func mergeRanges(ranges []Range) []Range {
 // -----------------------------------------------------------------------------
 
 func isDigits(s string) bool {
-    for _, r := range s {
-        if !unicode.IsDigit(r) { return false }
-    }
-    return true
+	for _, r := range s {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func isUUID(s string) bool {
-    if len(s) != 36 { return false }
-    if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' { return false }
-    for i, r := range s {
-        if i == 8 || i == 13 || i == 18 || i == 23 { continue }
-        if !isHex(r) { return false }
-    }
-    return true
+	if len(s) != 36 {
+		return false
+	}
+	if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+		return false
+	}
+	for i, r := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			continue
+		}
+		if !isHex(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func isHex(r rune) bool {
-    return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
+
 // -----------------------------------------------------------------------------
 // 3. Robust JSON Parser (using encoding/json)
 // -----------------------------------------------------------------------------
@@ -980,23 +1044,23 @@ func processJSONLine(line string) (string, bool) {
 }
 
 func redactMap(m map[string]interface{}) {
-    // 0. Generic KV Pair Support (Constraint: "key": "sensitive", "value": "secret")
-    // If we detect this pattern, efficiently redact the "value" field.
-    if kVal, ok := m["key"].(string); ok {
-        if isSensitiveKey(kVal) {
-             if _, hasVal := m["value"]; hasVal {
-                 // Redact value regardless of type
-                 switch v := m["value"].(type) {
-                 case string:
-                     m["value"] = redactWithHMAC(v)
-                 case json.Number:
-                     m["value"] = 0
-                 case float64:
-                     m["value"] = 0
-                 }
-             }
-        }
-    }
+	// 0. Generic KV Pair Support (Constraint: "key": "sensitive", "value": "secret")
+	// If we detect this pattern, efficiently redact the "value" field.
+	if kVal, ok := m["key"].(string); ok {
+		if isSensitiveKey(kVal) {
+			if _, hasVal := m["value"]; hasVal {
+				// Redact value regardless of type
+				switch v := m["value"].(type) {
+				case string:
+					m["value"] = redactWithHMAC(v)
+				case json.Number:
+					m["value"] = 0
+				case float64:
+					m["value"] = 0
+				}
+			}
+		}
+	}
 
 	for k, v := range m {
 		// Calculate key sensitivity once
@@ -1012,11 +1076,11 @@ func redactMap(m map[string]interface{}) {
 			if isKeySensitive {
 				m[k] = redactWithHMAC(val)
 			} else {
-                // Recursively scan the string value!
-                // This handles:
-                // 1. Nested JSON strings (e.g. "data": "{\"foo\":...}")
-                // 2. Unstructured PII (Luhn/CCs) inside the string
-                // 3. Key=Value pairs inside the string
+				// Recursively scan the string value!
+				// This handles:
+				// 1. Nested JSON strings (e.g. "data": "{\"foo\":...}")
+				// 2. Unstructured PII (Luhn/CCs) inside the string
+				// 3. Key=Value pairs inside the string
 				processed := ScanAndRedact(val)
 				if processed != val {
 					m[k] = processed
@@ -1030,10 +1094,10 @@ func redactMap(m map[string]interface{}) {
 			} else {
 				// Check Entropy (e.g. Credit Card numbers as Ints)
 				s := val.String()
-                // Use heuristics on string rep
-                // Note: We don't recurse ScanAndRedact here to avoid parsing number as JSON/Luhn line?
-                // Luhn might work on "4111..."
-                // But ScanAndRedact wraps result? No.
+				// Use heuristics on string rep
+				// Note: We don't recurse ScanAndRedact here to avoid parsing number as JSON/Luhn line?
+				// Luhn might work on "4111..."
+				// But ScanAndRedact wraps result? No.
 				processed := processSingleToken(s, s, false, false)
 				if processed != s {
 					// It WAS redacted. Convert to 0.
@@ -1044,13 +1108,13 @@ func redactMap(m map[string]interface{}) {
 			if isKeySensitive {
 				m[k] = 0
 			} else {
-                 s := fmt.Sprintf("%v", val)
-                 processed := processSingleToken(s, s, false, false)
-                 if processed != s {
-                     m[k] = 0
-                 }
-            }
-        // bools are usually safe
+				s := fmt.Sprintf("%v", val)
+				processed := processSingleToken(s, s, false, false)
+				if processed != s {
+					m[k] = 0
+				}
+			}
+			// bools are usually safe
 		}
 	}
 }
@@ -1063,23 +1127,23 @@ func redactSlice(s []interface{}) {
 		case []interface{}:
 			redactSlice(val)
 		case string:
-            // Recursive scan for array strings too
+			// Recursive scan for array strings too
 			processed := ScanAndRedact(val)
 			if processed != val {
 				s[i] = processed
 			}
 		case json.Number:
-             str := val.String()
-             proc := processSingleToken(str, str, false, false)
-             if proc != str {
-                 s[i] = 0
-             }
-        case float64:
-             str := fmt.Sprintf("%v", val)
-             proc := processSingleToken(str, str, false, false)
-             if proc != str {
-                 s[i] = 0
-             }
+			str := val.String()
+			proc := processSingleToken(str, str, false, false)
+			if proc != str {
+				s[i] = 0
+			}
+		case float64:
+			str := fmt.Sprintf("%v", val)
+			proc := processSingleToken(str, str, false, false)
+			if proc != str {
+				s[i] = 0
+			}
 		}
 	}
 }

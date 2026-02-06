@@ -13,9 +13,9 @@ func FuzzScanner(f *testing.F) {
 	f.Add("https://example.com?token=123")
 	f.Add("{\"user\": \"admin\", \"pass\": \"12345\"}")
 	f.Add("Fehler beim Verbinden mit Datenbank") // German
-	f.Add("Ошибка доступа") // Russian
-	f.Add("::1") // IPv6
-	f.Add(string([]byte{0xff, 0xfe, 0xfd})) // Invalid UTF-8
+	f.Add("Ошибка доступа")                      // Russian
+	f.Add("::1")                                 // IPv6
+	f.Add(string([]byte{0xff, 0xfe, 0xfd}))      // Invalid UTF-8
 
 	f.Fuzz(func(t *testing.T, input string) {
 		// 1. Crash Check: Should not panic
@@ -26,10 +26,10 @@ func FuzzScanner(f *testing.F) {
 			t.Errorf("Scanner produced invalid UTF-8 for input %q", input)
 		}
 
-		// 3. Differential Check (Basic): 
+		// 3. Differential Check (Basic):
 		// If input has no sensitive keys and low entropy, output should match input (mostly).
 		// This is hard to assert generally without recreating the logic.
-		
+
 		// 4. Length Check: Output size shouldn't explode (e.g. infinite loop expansion)
 		if len(output) > len(input)*3+100 {
 			t.Errorf("Output size exploded. Input: %d, Output: %d", len(input), len(output))

@@ -13,21 +13,21 @@ func TestScanner_Multilingual(t *testing.T) {
 		expectedHidden []string
 	}{
 		{
-			name: "Spanish Log",
-			input: "El usuario inició sesión con éxito. ID de sesión: 12345",
-			expectedSafe: []string{"El", "usuario", "inició", "sesión", "con", "éxito.", "ID", "de", "12345"},
+			name:           "Spanish Log",
+			input:          "El usuario inició sesión con éxito. ID de sesión: 12345",
+			expectedSafe:   []string{"El", "usuario", "inició", "sesión", "con", "éxito.", "ID", "de", "12345"},
 			expectedHidden: []string{},
 		},
 		{
-			name: "German Log",
-			input: "Fehler beim Verbinden mit Datenbank Benutzername: admin",
-			expectedSafe: []string{"Fehler", "beim", "Verbinden", "mit", "Datenbank", "Benutzername:", "admin"},
+			name:           "German Log",
+			input:          "Fehler beim Verbinden mit Datenbank Benutzername: admin",
+			expectedSafe:   []string{"Fehler", "beim", "Verbinden", "mit", "Datenbank", "Benutzername:", "admin"},
 			expectedHidden: []string{},
 		},
 		{
-			name: "Russian Log (Cyrillic)",
-			input: "Ошибка доступа для пользователя Ivan",
-			expectedSafe: []string{"Ошибка", "доступа", "для", "пользователя", "Ivan"},
+			name:           "Russian Log (Cyrillic)",
+			input:          "Ошибка доступа для пользователя Ivan",
+			expectedSafe:   []string{"Ошибка", "доступа", "для", "пользователя", "Ivan"},
 			expectedHidden: []string{},
 		},
 	}
@@ -78,14 +78,14 @@ func TestScanner_TechnicalJargon(t *testing.T) {
 
 func TestScanner_NegativeCases(t *testing.T) {
 	tests := []struct {
-		name           string
-		input          string
-		shouldRedact   bool
+		name         string
+		input        string
+		shouldRedact bool
 	}{
-		{"Weak Password", "password=123", true}, // Should be redacted because key 'password' is sensitive
-		{"Common Word", "key=value", true},      // Should be redacted because key 'key' is sensitive
+		{"Weak Password", "password=123", true},                     // Should be redacted because key 'password' is sensitive
+		{"Common Word", "key=value", true},                          // Should be redacted because key 'key' is sensitive
 		{"High Entropy Secret", "api_key=sk_live_51Nc7qE...", true}, // Should be redacted
-		{"Random Noise", "data=8f7d9a2b3c4e5f6", true}, // High entropy hex
+		{"Random Noise", "data=8f7d9a2b3c4e5f6", true},              // High entropy hex
 	}
 
 	// Ensure default config for this test
@@ -93,7 +93,7 @@ func TestScanner_NegativeCases(t *testing.T) {
 	currentConfig.MinSecretLength = 6
 	// Reset sensitive keys to default for this test to ensure "password" and "key" are caught
 	// (Actual implementation does not expose Reset, but defaults are loaded in init)
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ScanAndRedact(tt.input)
