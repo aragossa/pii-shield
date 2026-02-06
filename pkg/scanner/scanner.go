@@ -71,10 +71,9 @@ func init() {
 	} else {
 		salt := make([]byte, 32)
 		if _, err := rand.Read(salt); err != nil {
-			// LIBRARY SAFETY: Don't panic in init(). Log error and use a fallback (with warning).
-			// In a real secure env, this should be monitored.
-			fmt.Fprintf(os.Stderr, "CRITICAL ERROR: Failed to generate secure random salt: %v. Using fallback salt.\n", err)
-			copy(salt, []byte("fallback-salt-2026-UNSAFE"))
+			// CRITICAL SECURITY: Fail closed if we cannot generate a secure salt.
+			// Do not use a fallback.
+			panic(fmt.Sprintf("FATAL: Failed to generate secure random salt: %v", err))
 		}
 		currentConfig.Salt = salt
 	}
@@ -289,6 +288,22 @@ func ScanAndRedact(logLine string) string {
 
 	// Try robust JSON parsing first (Variant A from critique)
 	trimmed := strings.TrimSpace(logLine)
+
+	// URL Optimization: If line IS a URL (common in access logs), handle it fast.
+	if strings.HasPrefix(trimmed, "GET ") || strings.HasPrefix(trimmed, "POST ") || strings.Contains(trimmed, "://") {
+		// Extract URL from log line? Or just scan segment?
+		// "GET /api/..." -> The whole line isn't a URL.
+		// But maskURLParameters assumes input IS a URL? 
+		// "http://..." is a URL.
+		// "GET /foo?k=v" -> "/foo?k=v" is a URL path.
+		
+		// If the whole line is "GET /foo...", we probably shouldn't call maskURLParameters on the whole line logic 
+		// unless maskURLParameters handles "GET " prefix?
+		// No, maskURLParameters splits by "?".
+		
+		// Let's rely on scanSegment to find URLs?
+	}
+
 	if strings.HasPrefix(trimmed, "{") {
 		if jsonProcessed, ok := processJSONLine(trimmed); ok {
 			return jsonProcessed
@@ -434,7 +449,8 @@ func scanSegment(segment string) string {
 // isValuePos: if true, this token MUST be a value (skiye key checks).
 func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive bool, isValuePos bool) (string, bool) {
 	// 0. URLs First
-	if strings.Contains(rawToken, "://") {
+	// Support both full URLs (http://...) and relative paths with query params (/api...?k=v)
+	if strings.Contains(rawToken, "://") || (strings.Contains(rawToken, "?") && strings.Contains(rawToken, "=")) {
 		return maskURLParameters(rawToken), false
 	}
 
@@ -459,8 +475,10 @@ func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive b
 					// Recursive scan for non-sensitive keys (e.g. "data=key=val")
 					processedVal = ScanAndRedact(val)
 				}
-
-				return quote + key + "=" + processedVal + quote, keySensitive
+				
+				// Fix: Only treat as "Key" (affecting next token) if Value was empty.
+				// If Value was present, we consumed it, so next token is NOT the value.
+				return quote + key + "=" + processedVal + quote, keySensitive && val == ""
 			}
 			// Fallthrough to single token processing
 		} else {
@@ -475,7 +493,8 @@ func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive b
 			} else {
 				processedVal = ScanAndRedact(val)
 			}
-			return key + "=" + processedVal, keySensitive
+			// Fix: Only return isSensitiveKey=true if val is empty
+			return key + "=" + processedVal, keySensitive && val == ""
 		}
 	}
 
@@ -620,6 +639,11 @@ func isSensitiveKey(key string) bool {
 	// Check substring matching (backward compatible)
 	for _, sk := range currentConfig.SensitiveKeys {
 		if strings.Contains(k, sk) {
+			// Safety check: High entropy strings (likely secrets) should not be treated as keys
+			// even if they contain the word "secret" or "key".
+			if len(key) > 32 && CalculateComplexity(key) > currentConfig.EntropyThreshold {
+				return false
+			}
 			return true
 		}
 	}
@@ -793,12 +817,11 @@ func isTimestamp(token string) bool {
 	// 1700000000 is year 2023. ~2033 is 2000000000.
 	// Check if pure digits and length 10.
 	if len(token) == 10 && isDigits(token) {
-		return true // Accept all 10 digit numbers as potential timestamps? (Might be safe ID, or Account No)
-		// If strict, check starts.
-		// But wait, Account numbers > 8 length might be secrets.
-		// Unix Timestamp context is usually "time=170..." or "ts": 170...
-		// Let's be slightly specific, 17, 18.
-		if strings.HasPrefix(token, "17") || strings.HasPrefix(token, "18") {
+		// Unix Timestamp (10 digits).
+		// Current time (2023-2026) starts with 17 or 18.
+		// Future proofing: also accept 19, 20 (up to year 2033+)
+		if strings.HasPrefix(token, "17") || strings.HasPrefix(token, "18") || 
+		   strings.HasPrefix(token, "19") || strings.HasPrefix(token, "20") {
 			return true
 		}
 	}

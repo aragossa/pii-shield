@@ -1,0 +1,53 @@
+name: PII-Shield CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test, Lint & Fuzz
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Verify Dependencies
+      run: go mod verify
+
+    - name: Static Analysis (Vet)
+      run: go vet ./...
+
+    - name: Run Fuzz Checks (Sanity)
+      run: go test -fuzz=FuzzScanner -fuzztime=15s ./pkg/scanner
+
+    - name: Run Tests (Race & Coverage)
+      run: go test -race -coverprofile=coverage.out ./...
+
+    - name: Check Coverage Threshold
+      run: |
+        go tool cover -func=coverage.out
+        total=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+        echo "Total Coverage: $total%"
+        if (( $(echo "$total < 70.0" | bc -l) )); then
+          echo "❌ Coverage is below 70%"
+          exit 1
+        fi
+
+  benchmark:
+    name: Performance Check
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version: 'go.mod'
+    - name: Run Benchmarks
+      run: go test -bench=. -benchmem ./pkg/scanner

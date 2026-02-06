@@ -1,0 +1,7 @@
+{"ts": 1700000000, "msg": "hello", "password": "secret_pass_123!"}
+Log line with key=123456 and token=abcdef
+User session active: jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.secret_signature
+{"context": {"user": {"api_key": "sk_live_multi_level_json_secret"}}}
+{"prompt": "User said \"my pass is 123456\""}
+GET /api/v1/user?token=abcdef123456&uid=123
+Safe data check: uuid=550e8400-e29b-41d4-a716-446655440000 git_sha=a1b2c3d4e5f6

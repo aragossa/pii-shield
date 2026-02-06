@@ -46,8 +46,6 @@ var EnglishBigramFreqs = map[string]float64{
 	"ay": -5.5, "ga": -5.5, "ym": -6.0, "nu": -5.8, "um": -5.5,
 	"mm": -6.0, "t_": -9.0,
 	"pi": -5.5, "eb": -5.5, "ug": -5.5, "yl": -5.8, "oa": -5.3,
-	"rd": -5.5, "ys": -5.5, // "lo", "ad", "or", "wa", "te", "st", "em" REMOVED (dupes)
-
 	// Technical Keys / Rare
 	"cv": -8.0, "vv": -9.0, // CVV
 	"pw": -8.0, "wd": -7.5, // PWD
