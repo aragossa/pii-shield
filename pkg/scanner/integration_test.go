@@ -21,7 +21,7 @@ func TestGolden(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// FORCE DETERMINISTIC SALT for golden file stability
 			currentConfig.Salt = []byte("integration-test-salt-1234567890")
-			
+
 			inputBytes, err := os.ReadFile(inputPath)
 			if err != nil {
 				t.Fatalf("failed to read input file: %v", err)
@@ -29,12 +29,12 @@ func TestGolden(t *testing.T) {
 
 			// Run scanner on the entire file content
 			// Assuming file contains one log line per line, or we process the whole block.
-			// ScanAndRedact processes a single line or string. 
+			// ScanAndRedact processes a single line or string.
 			// If input file has multiple lines, we might want to split?
 			// Let's assume input file is a multi-line log dump.
 			// ScanAndRedact typically handles one line.
 			// Ideally we should split by newline and process.
-			
+
 			lines := strings.Split(string(inputBytes), "\n")
 			var outputLines []string
 			for _, line := range lines {
@@ -47,7 +47,7 @@ func TestGolden(t *testing.T) {
 			got := strings.Join(outputLines, "\n")
 
 			goldenPath := strings.TrimSuffix(inputPath, ".input") + ".golden"
-			
+
 			if *update {
 				err := os.WriteFile(goldenPath, []byte(got), 0644)
 				if err != nil {

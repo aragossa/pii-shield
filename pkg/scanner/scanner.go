@@ -293,14 +293,14 @@ func ScanAndRedact(logLine string) string {
 	if strings.HasPrefix(trimmed, "GET ") || strings.HasPrefix(trimmed, "POST ") || strings.Contains(trimmed, "://") {
 		// Extract URL from log line? Or just scan segment?
 		// "GET /api/..." -> The whole line isn't a URL.
-		// But maskURLParameters assumes input IS a URL? 
+		// But maskURLParameters assumes input IS a URL?
 		// "http://..." is a URL.
 		// "GET /foo?k=v" -> "/foo?k=v" is a URL path.
-		
-		// If the whole line is "GET /foo...", we probably shouldn't call maskURLParameters on the whole line logic 
+
+		// If the whole line is "GET /foo...", we probably shouldn't call maskURLParameters on the whole line logic
 		// unless maskURLParameters handles "GET " prefix?
 		// No, maskURLParameters splits by "?".
-		
+
 		// Let's rely on scanSegment to find URLs?
 	}
 
@@ -475,7 +475,7 @@ func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive b
 					// Recursive scan for non-sensitive keys (e.g. "data=key=val")
 					processedVal = ScanAndRedact(val)
 				}
-				
+
 				// Fix: Only treat as "Key" (affecting next token) if Value was empty.
 				// If Value was present, we consumed it, so next token is NOT the value.
 				return quote + key + "=" + processedVal + quote, keySensitive && val == ""
@@ -820,8 +820,8 @@ func isTimestamp(token string) bool {
 		// Unix Timestamp (10 digits).
 		// Current time (2023-2026) starts with 17 or 18.
 		// Future proofing: also accept 19, 20 (up to year 2033+)
-		if strings.HasPrefix(token, "17") || strings.HasPrefix(token, "18") || 
-		   strings.HasPrefix(token, "19") || strings.HasPrefix(token, "20") {
+		if strings.HasPrefix(token, "17") || strings.HasPrefix(token, "18") ||
+			strings.HasPrefix(token, "19") || strings.HasPrefix(token, "20") {
 			return true
 		}
 	}

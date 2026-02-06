@@ -42,10 +42,10 @@ func TestScanner_HighEntropySafeData(t *testing.T) {
 	// SAFE CONFIG MODIFICATION
 	oldThreshold := currentConfig.EntropyThreshold
 	oldMinSecret := currentConfig.MinSecretLength
-	
+
 	currentConfig.EntropyThreshold = 3.8
 	currentConfig.MinSecretLength = 6
-	
+
 	defer func() {
 		currentConfig.EntropyThreshold = oldThreshold
 		currentConfig.MinSecretLength = oldMinSecret

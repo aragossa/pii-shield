@@ -26,7 +26,7 @@ func BenchmarkScanAndRedact_Parallel(b *testing.B) {
 
 	// Ensure adaptive mode is enabled (or tested state) if that's the contention target
 	// For now, we test the default path which might hit regex locks.
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			_ = ScanAndRedact(line)
@@ -52,7 +52,7 @@ func BenchmarkThroughput(b *testing.B) {
 // Run with: go test -bench=BenchmarkAllocations -benchmem
 func BenchmarkAllocations(b *testing.B) {
 	line := `user=alice password=supersecret key=123456`
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {

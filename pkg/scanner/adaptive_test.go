@@ -36,7 +36,7 @@ func TestAdaptiveThreshold_Integration(t *testing.T) {
 	if threshold < 3.49 || threshold > 3.51 {
 		t.Errorf("Expected threshold ~3.5, got %f", threshold)
 	}
-	
+
 	// 5. Verify partial update
 	globalBaseline.Reset()
 	globalBaseline.Update(5.0)
