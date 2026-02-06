@@ -10,7 +10,7 @@ var result string
 // BenchmarkScanAndRedact measures the latency of processing a single typical log line.
 func BenchmarkScanAndRedact(b *testing.B) {
 	// A typical structured log line with mixed content
-	line := `{"level":"info","ts":1698765432,"msg":"User login successful","user_id":12345,"email":"test@example.com","session_id":"a1b2c3d4e5f6","api_key":"sk_live_1234567890abcdef1234567890abcdef","context":{"ip":"192.168.1.1","user_agent":"Mozilla/5.0"}}`
+	line := `{"level":"info","ts":1698765432,"msg":"User login successful","user_id":12345,"email":"test@example.com","session_id":"a1b2c3d4e5f6","api_key":"sk_test_1234567890abcdef1234567890abcdef","context":{"ip":"192.168.1.1","user_agent":"Mozilla/5.0"}}`
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
