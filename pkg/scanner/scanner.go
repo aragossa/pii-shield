@@ -173,26 +173,26 @@ func CalculateComplexity(token string) float64 {
         return 0
     }
 
+    // 1. Shannon Entropy
+    entropy := calculateShannon(token)
+
+    // 2. Class Bonus
+    bonus := calculateClassBonus(token)
+
+    // 3. Bigram Check (English Likelihood)
+    bigramScore := calculateBigramAdjustment(token)
+
+    return entropy + bonus + bigramScore
+}
+
+func calculateShannon(token string) float64 {
     freq := make(map[rune]int)
     totalChars := 0
-    
-    hasUpper := false
-    hasLower := false
-    hasDigit := false
-    hasSymbol := false
-
-    runes := []rune(token)
-    for _, r := range runes {
+    for _, r := range token {
         freq[r]++
         totalChars++
-        
-        if unicode.IsUpper(r) { hasUpper = true }
-        if unicode.IsLower(r) { hasLower = true }
-        if unicode.IsDigit(r) { hasDigit = true }
-        if unicode.IsPunct(r) || unicode.IsSymbol(r) { hasSymbol = true }
     }
 
-    // 1. Shannon Entropy
     entropy := 0.0
     logLen := math.Log2(float64(totalChars))
 
@@ -200,47 +200,60 @@ func CalculateComplexity(token string) float64 {
         p := float64(count) / float64(totalChars)
         entropy -= p * (math.Log2(float64(count)) - logLen)
     }
+    return entropy
+}
 
-    // 2. Class Bonus
+func calculateClassBonus(token string) float64 {
+    hasUpper := false
+    hasLower := false
+    hasDigit := false
+    hasSymbol := false
+
+    for _, r := range token {
+        if unicode.IsUpper(r) { hasUpper = true }
+        if unicode.IsLower(r) { hasLower = true }
+        if unicode.IsDigit(r) { hasDigit = true }
+        if unicode.IsPunct(r) || unicode.IsSymbol(r) { hasSymbol = true }
+    }
+
     classes := 0
     if hasUpper { classes++ }
     if hasLower { classes++ }
     if hasDigit { classes++ }
     if hasSymbol { classes++ }
 
-    bonus := 0.0
     if classes > 1 {
-        bonus = float64(classes-1) * 0.5
+        return float64(classes-1) * 0.5
+    }
+    return 0.0
+}
+
+func calculateBigramAdjustment(token string) float64 {
+    // CONDITIONAL: Can be disabled for non-English logs
+    if currentConfig.DisableBigramCheck || len(token) <= 3 {
+        return 0.0
     }
 
-	// 3. Bigram Check (English Likelihood)
-	// Calculate average bigram probability.
-	// Common English ~ -4.0 to -5.0
-	// Random / Base64 ~ -6.0 to -9.0
-	// CONDITIONAL: Can be disabled for non-English logs
-	
-	bigramScore := 0.0
-	if !currentConfig.DisableBigramCheck && totalChars > 3 {
-		sumProb := 0.0
-		count := 0
-		sLower := strings.ToLower(token)
-		for i := 0; i < len(sLower)-1; i++ {
-			bg := sLower[i : i+2]
-			sumProb += GetBigramProb(bg) // Using exported map/func from bigrams.go
-			count++
-		}
-		if count > 0 {
-			avgProb := sumProb / float64(count)
-			// If avgProb > -5.5, it's likely English or common text.
-			// We reduce complexity score to avoid false positives.
-			if avgProb > -5.8 { 
-				 bigramScore = -1.5 // Penalize score (make it "safer")
-			} else if avgProb < -7.0 {
-				 bigramScore = 0.5 // Boost score (more random)
-			}
-		}
-	}
-	return entropy + bonus + bigramScore
+    sumProb := 0.0
+    count := 0
+    sLower := strings.ToLower(token)
+    for i := 0; i < len(sLower)-1; i++ {
+        bg := sLower[i : i+2]
+        sumProb += GetBigramProb(bg) // Using exported map/func from bigrams.go
+        count++
+    }
+    
+    if count > 0 {
+        avgProb := sumProb / float64(count)
+        // If avgProb > -5.8, it's likely English or common text.
+        // We reduce complexity score to avoid false positives.
+        if avgProb > -5.8 { 
+             return -1.5 // Penalize score (make it "safer")
+        } else if avgProb < -7.0 {
+             return 0.5 // Boost score (more random)
+        }
+    }
+    return 0.0
 }
 
 
