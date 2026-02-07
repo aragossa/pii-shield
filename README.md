@@ -11,6 +11,8 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 ![Coverage Status](https://codecov.io/gh/aragossa/pii-shield/branch/main/graph/badge.svg)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/aragossa/pii-shield?sort=semver)
 
+"Don't let PII poison your AI models." PII-Shield ensures that sensitive data never reaches your training dataset, saving you from GDPR-forced model retraining.
+
 ## Why PII-Shield?
 
 Developers often forget to mask sensitive data. Traditional regex filters in Fluentd/Logstash are slow, hard to maintain, and consume expensive CPU on log aggregators.
