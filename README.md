@@ -9,6 +9,7 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 ![Go Reference](https://pkg.go.dev/badge/github.com/aragossa/pii-shield.svg)
 ![Build Status](https://github.com/aragossa/pii-shield/actions/workflows/test.yml/badge.svg)
 ![Coverage Status](https://codecov.io/gh/aragossa/pii-shield/branch/main/graph/badge.svg)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/aragossa/pii-shield?sort=semver)
 
 ## Why PII-Shield?
 
