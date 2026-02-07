@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"regexp"
@@ -26,6 +27,19 @@ type Config struct {
 	AdaptiveThreshold       bool     // Enable statistical adaptive threshold mode
 	SensitiveKeyPatterns    []string // Regex patterns for sensitive key detection (stored as strings)
 	AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
+	CustomRegexes           []CustomRegexRule
+}
+
+// CustomRegexConfig is the DTO for JSON unmarshalling from environment variables.
+type CustomRegexConfig struct {
+	Pattern string `json:"pattern"`
+	Name    string `json:"name"`
+}
+
+// CustomRegexRule holds the compiled regex and its name for runtime use.
+type CustomRegexRule struct {
+	Regexp *regexp.Regexp
+	Name   string
 }
 
 var (
@@ -164,6 +178,26 @@ func loadConfig() Config {
 			}
 		}
 	}
+
+	// Load Custom Regex List
+	if envCustomRegex := os.Getenv("PII_CUSTOM_REGEX_LIST"); envCustomRegex != "" {
+		var rawRules []CustomRegexConfig
+		if err := json.Unmarshal([]byte(envCustomRegex), &rawRules); err != nil {
+			log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid json format: %v", err)
+		}
+
+		for _, rule := range rawRules {
+			compiled, err := regexp.Compile(rule.Pattern)
+			if err != nil {
+				log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid regex '%s': %v", rule.Pattern, err)
+			}
+			cfg.CustomRegexes = append(cfg.CustomRegexes, CustomRegexRule{
+				Regexp: compiled,
+				Name:   rule.Name,
+			})
+		}
+	}
+
 	return cfg
 }
 
@@ -486,6 +520,19 @@ func trimQuotes(s string) string {
 
 func processSingleToken(content, original string, forcedSensitive bool, contextSensitive bool) string {
 
+	// 1. Deterministic Check: Custom Regexes (High Priority)
+	// This overrides everything (Safety Whitelists & Entropy).
+	if len(content) >= 5 { // Optimization: Skip short tokens
+		for _, rule := range currentConfig.CustomRegexes {
+			if rule.Regexp.MatchString(content) {
+				if rule.Name != "" {
+					return fmt.Sprintf("[HIDDEN:%s]", rule.Name)
+				}
+				return "[HIDDEN]"
+			}
+		}
+	}
+
 	// 0. Safety Whitelists
 	if isSafe(content) {
 		return original
@@ -502,7 +549,7 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 		}
 	}
 
-	// 2. Complexity Score
+	// 3. Complexity Score
 	score := CalculateComplexity(content)
 
 	threshold := currentConfig.EntropyThreshold

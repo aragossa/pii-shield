@@ -29,6 +29,27 @@ PII-Shield is configured entirely via environment variables.
 | `PII_DISABLE_BIGRAM_CHECK` | Disable English bigram validation. Set to `true` for non-English logs. | `false` |
 | `PII_BIGRAM_DEFAULT_SCORE` | Log-probability score for unknown bigrams. | `-7.0` |
 
+## Value-Based Regex Redaction (Deterministic)
+
+| Variable | Description |
+|----------|-------------|
+| `PII_CUSTOM_REGEX_LIST` | JSON array of regex objects to enforce redaction regardless of entropy. Supports named placeholders. |
+
+### Example
+
+```bash
+export PII_CUSTOM_REGEX_LIST='[{"pattern": "^[0-9a-fA-F-]{36}$", "name": "UUID"}, {"pattern": "^TX-\\d{5}$", "name": "TX"}]'
+```
+
+> [!TIP]
+> **Priority:** Custom regexes are checked **before** entropy and safety whitelists. Use this to catch structured data like UUIDs or specific IDs that the entropy scanner might miss or consider "safe".
+> **Performance:** Regex checks are skipped for tokens shorter than 5 characters.
+
+> [!WARNING]
+> **Per-Token Matching:** The regex is applied to individual tokens (words/strings separated by spaces, `=`, `:`).
+> Patterns containing spaces (e.g., Credit Cards `4111 1234...`) **will not work** because the scanner splits them into multiple tokens before checking the regex.
+
+
 ## Example (Kubernetes)
 
 ```yaml
