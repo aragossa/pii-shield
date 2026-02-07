@@ -5,7 +5,13 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
 ![Docker Pulls](https://img.shields.io/docker/pulls/thelisdeep/pii-shield)
-![Go Report Card](https://goreportcard.com/badge/github.com/aragossa/pii-shield)
+![Go Report Card](https://goreportcard.com/badge/github.com/aragossa/pii-shield?v=1)
+![Go Reference](https://pkg.go.dev/badge/github.com/aragossa/pii-shield.svg)
+![Build Status](https://github.com/aragossa/pii-shield/actions/workflows/test.yml/badge.svg)
+![Coverage Status](https://codecov.io/gh/aragossa/pii-shield/branch/main/graph/badge.svg)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/aragossa/pii-shield?sort=semver)
+
+"Don't let PII poison your AI models." PII-Shield ensures that sensitive data never reaches your training dataset, saving you from GDPR-forced model retraining.
 
 ## Why PII-Shield?
 
@@ -14,6 +20,7 @@ Developers often forget to mask sensitive data. Traditional regex filters in Flu
 **PII-Shield sits right next to your app container:**
 - **High Throughput:** Processes over 100k log lines per second (parallel) with low latency (~0.02ms per line).
 - **Context-Aware Entropy Analysis:** Detected high-entropy secrets even without keys (e.g. `Error: ... 44saCk9...`) by analyzing context keywords.
+- **Custom Regex Rules:** Deterministic redaction for structured data (UUIDs, IDs) that overrides entropy checks, ensuring 100% compliance for known patterns.
 - **100% Accuracy:** Verified against "Wild" stress tests including binary garbage, JSON nesting, and multilingual logs.
 - **Deterministic Hashing:** Replaces secrets with unique hashes (e.g., `[HIDDEN:a1b2c]`), allowing QA to correlate errors without seeing the raw data.
 - **Drop-in:** No code changes required. Works with any language (Node, Python, Java, Go).
@@ -38,6 +45,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for a full list of environment variable
 - `PII_SALT`: Custom HMAC salt (Required for production).
 - `PII_ADAPTIVE_THRESHOLD`: Enable dynamic entropy baselines.
 - `PII_DISABLE_BIGRAM_CHECK`: Optimize for non-English logs.
+- `PII_CUSTOM_REGEX_LIST`: Custom regex rules for deterministic redaction.
 
 ## Quick Start
 1. Test Locally (CLI)
