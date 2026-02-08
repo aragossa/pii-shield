@@ -40,12 +40,30 @@ Get the latest lightweight image from Docker Hub:
 docker pull thelisdeep/pii-shield:latest
 ```
 
+### Build from Source
+
+You can build the binary directly from the source code:
+
+```bash
+go build -o pii-shield ./cmd/cleaner/main.go
+```
+
 ## Configuration
 See [CONFIGURATION.md](CONFIGURATION.md) for a full list of environment variables, including:
 - `PII_SALT`: Custom HMAC salt (Required for production).
 - `PII_ADAPTIVE_THRESHOLD`: Enable dynamic entropy baselines.
 - `PII_DISABLE_BIGRAM_CHECK`: Optimize for non-English logs.
 - `PII_CUSTOM_REGEX_LIST`: Custom regex rules for deterministic redaction.
+
+### Entropy Sensitivity Table (Default Threshold: 3.6)
+
+| Entropy | Data Type | Example |
+|---------|-----------|---------|
+| **0.0 - 3.0** | Common words, repeats | `password`, `admin`, `111111` |
+| **3.0 - 3.6** | CamelCase, partial hashes | `ProgramCampaignInstanceJob`, `8f3a11b2c` |
+| **3.6 - 4.5** | Paths, UUIDs, Weak Passwords | `/opt/phishing/runtime`, `P@ssw0rd2026!` |
+| **4.5 - 5.0** | Medium Tokens | `E8s9d_2kL1` |
+| **5.0+** | High Entropy Keys | (SHA-256, API Keys) |
 
 ## Quick Start
 1. Test Locally (CLI)

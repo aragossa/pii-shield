@@ -15,7 +15,7 @@ PII-Shield is configured entirely via environment variables.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PII_ENTROPY_THRESHOLD` | Shannon entropy threshold (3.0 - 8.0). Higher = fewer false positives, but might miss simple passwords. | `3.8` |
+| `PII_ENTROPY_THRESHOLD` | Shannon entropy threshold (3.0 - 8.0). Higher = fewer false positives, but might miss simple passwords. | `3.6` |
 | `PII_MIN_SECRET_LENGTH` | Minimum length of a string to be considered a candidate token. | `6` |
 | `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive). | `password,secret,token,key,api_key...` |
 | `PII_SENSITIVE_KEY_PATTERNS` | Comma-separated list of regex patterns for key detection. | (empty) |
@@ -48,6 +48,22 @@ export PII_CUSTOM_REGEX_LIST='[{"pattern": "^[0-9a-fA-F-]{36}$", "name": "UUID"}
 > [!WARNING]
 > **Per-Token Matching:** The regex is applied to individual tokens (words/strings separated by spaces, `=`, `:`).
 > Patterns containing spaces (e.g., Credit Cards `4111 1234...`) **will not work** because the scanner splits them into multiple tokens before checking the regex.
+
+
+## Safe Regex Whitelist (Bypass)
+
+| Variable | Description |
+|----------|-------------|
+| `PII_SAFE_REGEX_LIST` | JSON array of regex objects to **ignore** during scanning. Matches are returned as-is. |
+
+### Example
+
+```bash
+export PII_SAFE_REGEX_LIST='[{"pattern": "^SAFE-[0-9]{4}$", "name": "SafePrefix"}]'
+```
+
+> [!IMPORTANT]
+> **Top Priority:** Whitelisted patterns are checked **first**. If a token matches a safe regex, it bypasses all other checks (Custom Regex, Entropy, etc.).
 
 
 ## Example (Kubernetes)

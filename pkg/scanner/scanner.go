@@ -28,6 +28,7 @@ type Config struct {
 	SensitiveKeyPatterns    []string // Regex patterns for sensitive key detection (stored as strings)
 	AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
 	CustomRegexes           []CustomRegexRule
+	SafeRegexes             []CustomRegexRule
 }
 
 // CustomRegexConfig is the DTO for JSON unmarshalling from environment variables.
@@ -63,6 +64,10 @@ var (
 		"denied": true, "unauthorized": true, "broken": true,
 		"password": true, "secret": true, "token": true, "key": true, "auth": true,
 	}
+
+	// DefaultEntropyThreshold is the Shannon entropy threshold for high-entropy strings.
+	// Lowered from 3.8 to 3.6 to catch shorter random alphanumeric strings.
+	DefaultEntropyThreshold = 3.6
 )
 
 func init() {
@@ -90,7 +95,7 @@ func parseInt(s string) (int, error) {
 
 func loadConfig() Config {
 	cfg := Config{
-		EntropyThreshold:        3.8,   // Adjusted for bigrams
+		EntropyThreshold:        DefaultEntropyThreshold,   // Adjusted for bigrams
 		MinSecretLength:         6,     // Lower minimal length as we have better context
 		DisableBigramCheck:      false, // Enable bigram check by default
 		BigramDefaultScore:      -7.0,  // Default for unknown bigrams
@@ -192,6 +197,25 @@ func loadConfig() Config {
 				log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid regex '%s': %v", rule.Pattern, err)
 			}
 			cfg.CustomRegexes = append(cfg.CustomRegexes, CustomRegexRule{
+				Regexp: compiled,
+				Name:   rule.Name,
+			})
+		}
+	}
+
+	// Load Safe Regex List (Whitelist)
+	if envSafeRegex := os.Getenv("PII_SAFE_REGEX_LIST"); envSafeRegex != "" {
+		var rawRules []CustomRegexConfig
+		if err := json.Unmarshal([]byte(envSafeRegex), &rawRules); err != nil {
+			log.Fatalf("PII_SAFE_REGEX_LIST error: invalid json format: %v", err)
+		}
+
+		for _, rule := range rawRules {
+			compiled, err := regexp.Compile(rule.Pattern)
+			if err != nil {
+				log.Fatalf("PII_SAFE_REGEX_LIST error: invalid regex '%s': %v", rule.Pattern, err)
+			}
+			cfg.SafeRegexes = append(cfg.SafeRegexes, CustomRegexRule{
 				Regexp: compiled,
 				Name:   rule.Name,
 			})
@@ -519,6 +543,16 @@ func trimQuotes(s string) string {
 }
 
 func processSingleToken(content, original string, forcedSensitive bool, contextSensitive bool) string {
+
+	// 0. Whitelist Check: Safe Regexes (Top Priority)
+	// This overrides everything (Custom Regex Redaction, Safety Whitelists & Entropy).
+	if len(content) >= 3 { // Optimization: Skip very short tokens
+		for _, rule := range currentConfig.SafeRegexes {
+			if rule.Regexp.MatchString(content) {
+				return original
+			}
+		}
+	}
 
 	// 1. Deterministic Check: Custom Regexes (High Priority)
 	// This overrides everything (Safety Whitelists & Entropy).
