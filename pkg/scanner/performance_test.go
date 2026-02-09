@@ -1,8 +1,11 @@
 package scanner
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -23,6 +26,13 @@ func resetConfig() {
 		},
 	}
 	sensitiveRegex = nil
+
+	// Reset HMAC Pool with new salt
+	hmacPool = &sync.Pool{
+		New: func() interface{} {
+			return hmac.New(sha256.New, currentConfig.Salt)
+		},
+	}
 }
 
 // -----------------------------------------------------------------------------

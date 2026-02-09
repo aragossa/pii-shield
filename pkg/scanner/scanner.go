@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"log"
 	"math"
 	"os"
@@ -73,9 +74,18 @@ var (
 	DefaultEntropyThreshold = 3.6
 )
 
+var hmacPool *sync.Pool
+
 func init() {
 	// defaults
 	currentConfig = loadConfig()
+
+	// Initialize HMAC Pool
+	hmacPool = &sync.Pool{
+		New: func() interface{} {
+			return hmac.New(sha256.New, currentConfig.Salt)
+		},
+	}
 
 	for i := 1; i < 256; i++ {
 		logTable[i] = math.Log2(float64(i))
@@ -277,8 +287,44 @@ func CalculateComplexity(token string) float64 {
 }
 
 func calculateShannon(token string) float64 {
-	freq := make(map[rune]int)
+	if len(token) == 0 {
+		return 0
+	}
+
+	// Optimization: Stack allocation for ASCII-only tokens (common case)
+	// Checks for ASCII and populates counts in one pass.
+	// If non-ASCII found, falls back to map.
+	var counts [256]int
+	isASCII := true
 	totalChars := 0
+
+	// Use byte iteration for speed
+	for i := 0; i < len(token); i++ {
+		b := token[i]
+		if b >= utf8.RuneSelf {
+			isASCII = false
+			break
+		}
+		counts[b]++
+		totalChars++
+	}
+
+	if isASCII {
+		entropy := 0.0
+		logLen := math.Log2(float64(totalChars))
+		for _, count := range counts {
+			if count == 0 {
+				continue
+			}
+			p := float64(count) / float64(totalChars)
+			entropy -= p * (math.Log2(float64(count)) - logLen)
+		}
+		return entropy
+	}
+
+	// Fallback: Unicode (Allocates map)
+	freq := make(map[rune]int)
+	totalChars = 0
 	for _, r := range token {
 		freq[r]++
 		totalChars++
@@ -364,7 +410,10 @@ func calculateBigramAdjustment(token string) float64 {
 }
 
 func redactWithHMAC(sensitiveData string, sb *strings.Builder) {
-	mac := hmac.New(sha256.New, currentConfig.Salt)
+	mac := hmacPool.Get().(hash.Hash)
+	defer hmacPool.Put(mac)
+
+	mac.Reset()
 	mac.Write([]byte(sensitiveData))
 	// Zero-allocation hex encoding
 	// We need 6 chars of hash. Sha256 is 32 bytes -> 64 hex chars.
@@ -1089,6 +1138,15 @@ type Range struct {
 }
 
 func FindLuhnSequences(line string) []Range {
+	// Optimization: Early exit if no digits (Avoids allocating slices)
+	if !strings.ContainsAny(line, "0123456789") {
+		return nil
+	}
+	// Note: The above optimization covers ASCII digits (most common for Credit Cards).
+	// If we support non-ASCII digits (e.g. Arabic-Indic), we'd need unicode check,
+	// but strings.IndexFunc(line, unicode.IsDigit) is slower.
+	// Given standard usage, checking ASCII digits is a massive win for 99% of logs.
+
 	var ranges []Range
 	n := len(line)
 	if n < 13 {
