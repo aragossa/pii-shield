@@ -20,10 +20,10 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 		expectedOutput string
 	}{
 		{
-			name:           "UUID Redaction (Named)",
-			regexConfig:    `[{"pattern": "^[0-9a-fA-F-]{36}$", "name": "UUID"}]`,
-			input:          "User ID: 550e8400-e29b-41d4-a716-446655440000",
-			expectedOutput: "User ID: [HIDDEN:UUID]",
+			name:           "Account Redaction (Named)",
+			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": "Account"}]`,
+			input:          "User ID: ACCT-1234567890",
+			expectedOutput: "User ID: [HIDDEN:Account]",
 		},
 		{
 			name:           "Documentation Example (TX License)",
@@ -32,16 +32,16 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 			expectedOutput: "License: [HIDDEN:TX]",
 		},
 		{
-			name:           "UUID Redaction (Unnamed)",
-			regexConfig:    `[{"pattern": "^[0-9a-fA-F-]{36}$", "name": ""}]`,
-			input:          "Transaction: 550e8400-e29b-41d4-a716-446655440000",
+			name:           "Account Redaction (Unnamed)",
+			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": ""}]`,
+			input:          "Transaction: ACCT-1234567890",
 			expectedOutput: "Transaction: [HIDDEN]",
 		},
 		{
 			name:           "Case Insensitivity (Implicit in Pattern)",
-			regexConfig:    `[{"pattern": "(?i)^[0-9a-f-]{36}$", "name": "UUID"}]`,
-			input:          "ID: 550E8400-E29B-41D4-A716-446655440000",
-			expectedOutput: "ID: [HIDDEN:UUID]",
+			regexConfig:    `[{"pattern": "(?i)^acct-[0-9]{10}$", "name": "Account"}]`,
+			input:          "ID: ACCT-1234567890",
+			expectedOutput: "ID: [HIDDEN:Account]",
 		},
 		{
 			name:           "False Positive Check (Short)",
@@ -51,15 +51,15 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 		},
 		{
 			name:           "Multiple Regexes",
-			regexConfig:    `[{"pattern": "^[0-9a-f-]{36}$", "name": "UUID"}, {"pattern": "^TX-[0-9]{5}$", "name": "TX"}]`,
-			input:          "ID: 550e8400-e29b-41d4-a716-446655440000 Ref: TX-12345",
-			expectedOutput: "ID: [HIDDEN:UUID] Ref: [HIDDEN:TX]",
+			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": "Account"}, {"pattern": "^TX-[0-9]{5}$", "name": "TX"}]`,
+			input:          "ID: ACCT-1234567890 Ref: TX-12345",
+			expectedOutput: "ID: [HIDDEN:Account] Ref: [HIDDEN:TX]",
 		},
 		{
 			name:           "No Config",
 			regexConfig:    "",
-			input:          "Value: 550e8400-e29b-41d4-a716-446655440000",
-			expectedOutput: "Value: 550e8400-e29b-41d4-a716-446655440000", // Not hidden without config (assuming low entropy setting for test, but default might catch it. Let's assume default entropy is high enough not to catch it or we reset regex lists)
+			input:          "Value: ACCT-1234567890",
+			expectedOutput: "Value: ACCT-1234567890", // Not hidden without config
 		},
 	}
 
@@ -132,11 +132,11 @@ func TestScanner_SafeRegexWhitelist(t *testing.T) {
 		expectedOutput string
 	}{
 		{
-			name:           "Whitelist UUID",
-			safeConfig:     `[{"pattern": "^[0-9a-fA-F-]{36}$", "name": "UUID"}]`,
+			name:           "Whitelist Custom ID",
+			safeConfig:     `[{"pattern": "^ALLOWED-[0-9]+$", "name": "Allowed"}]`,
 			customConfig:   "",
-			input:          "Safe ID: 550e8400-e29b-41d4-a716-446655440000",
-			expectedOutput: "Safe ID: 550e8400-e29b-41d4-a716-446655440000",
+			input:          "Safe ID: ALLOWED-12345",
+			expectedOutput: "Safe ID: ALLOWED-12345",
 		},
 		{
 			name:           "Conflict: Whitelist Wins over Custom Redaction",

@@ -42,8 +42,9 @@ export PII_CUSTOM_REGEX_LIST='[{"pattern": "^[0-9a-fA-F-]{36}$", "name": "UUID"}
 ```
 
 > [!TIP]
-> **Priority:** Custom regexes are checked **before** entropy and safety whitelists. Use this to catch structured data like UUIDs or specific IDs that the entropy scanner might miss or consider "safe".
+> **Priority:** Custom regexes are checked **before** entropy but **after** static safety whitelists. Use this to catch structured data like UUIDs or specific IDs that the entropy scanner might miss or consider "safe".
 > **Performance:** Regex checks are skipped for tokens shorter than 5 characters.
+> **Warning:** Each new rule reduces performance. Try to use no more than 3-5 rules.
 
 > [!WARNING]
 > **Per-Token Matching:** The regex is applied to individual tokens (words/strings separated by spaces, `=`, `:`).
