@@ -54,6 +54,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for a full list of environment variable
 - `PII_ADAPTIVE_THRESHOLD`: Enable dynamic entropy baselines.
 - `PII_DISABLE_BIGRAM_CHECK`: Optimize for non-English logs.
 - `PII_CUSTOM_REGEX_LIST`: Custom regex rules for deterministic redaction.
+- `PII_SAFE_REGEX_LIST`: Whitelist regex rules to ignore (matches are returned as-is).
 
 ### Entropy Sensitivity Table (Default Threshold: 3.6)
 

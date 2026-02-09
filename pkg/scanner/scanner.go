@@ -854,7 +854,31 @@ func isIPv6(token string) bool {
 }
 
 func isPath(token string) bool {
-	return strings.HasPrefix(token, "/") || strings.HasPrefix(token, "./") || strings.HasPrefix(token, "../")
+	// Unix Paths
+	if strings.HasPrefix(token, "/") || strings.HasPrefix(token, "./") || strings.HasPrefix(token, "../") {
+		return true
+	}
+
+	// Windows Paths / Namespaces
+	// 1. Drive letter (e.g. C:\...)
+	if len(token) >= 3 && unicode.IsLetter(rune(token[0])) && token[1] == ':' && token[2] == '\\' {
+		return true
+	}
+
+	// 2. UNC Path (e.g. \\Server\Share)
+	if strings.HasPrefix(token, `\\`) {
+		return true
+	}
+
+	// 3. Generic Windows Path or Namespace (contains at least two backslashes)
+	// e.g. "app\modules\adaptivephishing" or "System\Windows\.."
+	// We require at least 2 backslashes to avoid false positives with escaped chars in other contexts,
+	// though the tokenizer handles those.
+	if strings.Count(token, `\`) >= 2 {
+		return true
+	}
+
+	return false
 }
 
 func isGitHash(token string) bool {
