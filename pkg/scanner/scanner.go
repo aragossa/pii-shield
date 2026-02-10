@@ -556,7 +556,10 @@ func scanSegment(segment string, sb *strings.Builder) {
 			if r == '\\' {
 				i += width
 				if i < n {
-					_, w2 := utf8.DecodeRuneInString(segment[i:])
+					r2, w2 := utf8.DecodeRuneInString(segment[i:])
+					if r2 == utf8.RuneError && w2 == 1 {
+						seenInvalid = true
+					}
 					i += w2
 				}
 				continue
