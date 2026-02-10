@@ -275,6 +275,19 @@ func loadConfig() Config {
 	return cfg
 }
 
+// UpdateConfig updates the global configuration and resets the HMAC pool.
+// This is primarily used for WASM environments where config is dynamic.
+func UpdateConfig(cfg Config) {
+	currentConfig = cfg
+
+	// Re-initialize HMAC Pool with new salt
+	hmacPool = &sync.Pool{
+		New: func() interface{} {
+			return hmac.New(sha256.New, currentConfig.Salt)
+		},
+	}
+}
+
 // -----------------------------------------------------------------------------
 // 1. Core Entropy Logic
 // -----------------------------------------------------------------------------

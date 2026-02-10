@@ -20,7 +20,9 @@ func TestGolden(t *testing.T) {
 		name := filepath.Base(inputPath)
 		t.Run(name, func(t *testing.T) {
 			// FORCE DETERMINISTIC SALT for golden file stability
-			currentConfig.Salt = []byte("integration-test-salt-1234567890")
+			cfg := currentConfig
+			cfg.Salt = []byte("integration-test-salt-1234567890")
+			UpdateConfig(cfg)
 
 			inputBytes, err := os.ReadFile(inputPath)
 			if err != nil {

@@ -41,3 +41,5 @@ Thumbs.db
 cleaner
 docs
 buiild.sh
+public
+cmd/wasm/
