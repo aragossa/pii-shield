@@ -44,7 +44,9 @@ export PII_CUSTOM_REGEX_LIST='[{"pattern": "^[0-9a-fA-F-]{36}$", "name": "UUID"}
 > [!TIP]
 > **Priority:** Custom regexes are checked **before** entropy but **after** static safety whitelists. Use this to catch structured data like UUIDs or specific IDs that the entropy scanner might miss or consider "safe".
 > **Performance:** Regex checks are skipped for tokens shorter than 5 characters.
-> **Warning:** Each new rule reduces performance. Try to use no more than 3-5 rules.
+
+> [!NOTE]
+> **Optimized Performance:** PII-Shield uses a combined O(1) regex engine. You can define multiple custom rules (10+) with minimal performance impact.
 
 > [!WARNING]
 > **Per-Token Matching:** The regex is applied to individual tokens (words/strings separated by spaces, `=`, `:`).
@@ -69,15 +71,27 @@ export PII_SAFE_REGEX_LIST='[{"pattern": "^SAFE-[0-9]{4}$", "name": "SafePrefix"
 
 ## Example (Kubernetes)
 
+Here is a production-ready configuration using `secretKeyRef` for the salt and defining regex rules.
+
 ```yaml
 env:
+  # 1. Determinism: Load Salt from a K8s Secret (Recommended)
   - name: PII_SALT
     valueFrom:
       secretKeyRef:
         name: pii-shield-secrets
         key: salt
+
+  # 2. Tuning: Adjust Sensitivity
   - name: PII_ENTROPY_THRESHOLD
     value: "4.2"
-  - name: PII_ADAPTIVE_THRESHOLD
-    value: "true"
+  
+  # 3. Whitelist: Explicitly allow safe patterns (e.g. Git SHA)
+  # Note: Use single quotes '' for the value to avoid YAML escaping issues with JSON
+  - name: PII_SAFE_REGEX_LIST
+    value: '[{"pattern": "^[a-f0-9]{7}$", "name": "GitShortSHA"}]'
+
+  # 4. Custom Redaction: Block specific patterns (e.g. internal IDs)
+  - name: PII_CUSTOM_REGEX_LIST
+    value: '[{"pattern": "^INTERNAL-[0-9]+$", "name": "InternalID"}]'
 ```

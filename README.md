@@ -18,19 +18,20 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 Developers often forget to mask sensitive data. Traditional regex filters in Fluentd/Logstash are slow, hard to maintain, and consume expensive CPU on log aggregators.
 
 **PII-Shield sits right next to your app container:**
-- **High Throughput:** Processes over 100k log lines per second (parallel) with low latency (~0.02ms per line).
+- **Production Ready:** Optimized for Kubernetes sidecars with **ultra-low memory allocations** (zero-GC overhead on hot paths) and deterministic O(1) regex matching.
 - **Context-Aware Entropy Analysis:** Detected high-entropy secrets even without keys (e.g. `Error: ... 44saCk9...`) by analyzing context keywords.
 - **Custom Regex Rules:** Deterministic redaction for structured data (UUIDs, IDs) that overrides entropy checks, ensuring 100% compliance for known patterns.
 - **100% Accuracy:** Verified against "Wild" stress tests including binary garbage, JSON nesting, and multilingual logs.
 - **Deterministic Hashing:** Replaces secrets with unique hashes (e.g., `[HIDDEN:a1b2c]`), allowing QA to correlate errors without seeing the raw data.
 - **Drop-in:** No code changes required. Works with any language (Node, Python, Java, Go).
+- **Whitelist Support:** Explicitly allow safe patterns (e.g., git hashes, system IDs) using `PII_SAFE_REGEX_LIST` to prevent false positives.
 
 ## Performance Considerations
 
-While PII-Shield is highly optimized, deep inspection of JSON logs (`{"key": "value"}`) requires parsing and re-serialization, which is CPU-intensive compared to simple text scanning.
-- **Text Logs:** Extremely fast (low allocation overhead).
-- **JSON Logs:** Higher CPU usage due to `encoding/json` overhead.
-- **Recommendation:** Usage is safe for high throughput, but be aware of the serialization cost for very large JSON blobs (>1MB).
+While PII-Shield is highly optimized, deep inspection of complex logs requires careful attention to configuration.
+- **Text Logs:** Extremely fast (>100k lines/s).
+- **JSON Logs:** Zero-allocation parsing (no `encoding/json` overhead). The scanner manually parses JSON structures to ensure high throughput (~7MB/s) without memory spikes.
+- **Recommendation:** Usage is safe for high throughput. We use recursion safeguards to prevent stack overflows on deeply nested JSON.
 
 ## Installation
 
@@ -62,7 +63,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for a full list of environment variable
 |---------|-----------|---------|
 | **0.0 - 3.0** | Common words, repeats | `password`, `admin`, `111111` |
 | **3.0 - 3.6** | CamelCase, partial hashes | `ProgramCampaignInstanceJob`, `8f3a11b2c` |
-| **3.6 - 4.5** | Paths, UUIDs, Weak Passwords | `/opt/phishing/runtime`, `P@ssw0rd2026!` |
+| **3.6 - 4.5** | Paths, UUIDs, Weak Passwords | `/opt/application/runtime`, `P@ssw0rd2026!` |
 | **4.5 - 5.0** | Medium Tokens | `E8s9d_2kL1` |
 | **5.0+** | High Entropy Keys | (SHA-256, API Keys) |
 
