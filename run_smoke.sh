@@ -27,6 +27,10 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}✅ Go tests passed.${NC}\n"
 
+echo -e "${BLUE}🚀 Running Go Benchmarks...${NC}"
+go test -bench=. -benchmem -v ./pkg/scanner
+echo -e "${GREEN}✅ Benchmarks complete.${NC}\n"
+
 echo -e "${BLUE}🏗️  Building Docker Image...${NC}"
 docker build -t pii-shield:local . > /dev/null 2>&1
 if [ $? -ne 0 ]; then
