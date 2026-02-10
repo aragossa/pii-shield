@@ -117,7 +117,7 @@ spec:
 This project is verified with a comprehensive suite:
 1. **Unit Tests**: Cover edge cases, multilingual support, and JSON integrity.
 2. **Fuzzing**: Native Go fuzzing ensures crash safety against invalid inputs.
-3. **Stress Testing**: `./full_stress_test.sh` validates 100% detection accuracy on mixed workloads.
+3. **Smoke Testing**: `./run_smoke.sh` validates 100% detection accuracy on mixed workloads.
 
 ## License
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.

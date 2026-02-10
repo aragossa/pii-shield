@@ -1,5 +1,5 @@
 #!/bin/bash
-# full_stress_test.sh - v5 (With Performance Metrics & macOS Support)
+# run_smoke.sh - v5 (With Performance Metrics & macOS Support)
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
