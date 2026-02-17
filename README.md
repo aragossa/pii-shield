@@ -26,6 +26,12 @@ Developers often forget to mask sensitive data. Traditional regex filters in Flu
 - **Drop-in:** No code changes required. Works with any language (Node, Python, Java, Go).
 - **Whitelist Support:** Explicitly allow safe patterns (e.g., git hashes, system IDs) using `PII_SAFE_REGEX_LIST` to prevent false positives.
 
+## Trusted By
+
+**GuardSpine** (AI Governance Kernel) integrated PII-Shield's **In-Process WASM** to sanitize sensitive evidence trails directly within their Node.js and Python agents.
+
+> We chose the WASM architecture to ensure **zero network overhead** and **<1ms latency**. PII-Shield runs directly in-process, preserving the referential integrity of our hash chains while keeping logs compliant.
+
 ## Performance Considerations
 
 While PII-Shield is highly optimized, deep inspection of complex logs requires careful attention to configuration.
@@ -111,7 +117,6 @@ spec:
     - name: bin-dir
       mountPath: /opt/bin
 ```
-
 
 ## Verification
 This project is verified with a comprehensive suite:
