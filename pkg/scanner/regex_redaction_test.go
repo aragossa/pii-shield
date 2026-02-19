@@ -3,6 +3,7 @@ package scanner
 import (
 	"os"
 	"os/exec"
+	"regexp"
 	"testing"
 )
 
@@ -23,25 +24,29 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 			name:           "Account Redaction (Named)",
 			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": "Account"}]`,
 			input:          "User ID: ACCT-1234567890",
-			expectedOutput: "User ID: [HIDDEN:Account]",
+			// Expect: [HIDDEN:Account:HexHash]
+			expectedOutput: `User ID: \[HIDDEN:Account:[a-f0-9]{6}\]`,
 		},
 		{
 			name:           "Documentation Example (TX License)",
 			regexConfig:    `[{"pattern": "^TX-[0-9]{5}$", "name": "TX"}]`,
 			input:          "License: TX-12345",
-			expectedOutput: "License: [HIDDEN:TX]",
+			expectedOutput: `License: \[HIDDEN:TX:[a-f0-9]{6}\]`,
 		},
 		{
 			name:           "Account Redaction (Unnamed)",
 			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": ""}]`,
 			input:          "Transaction: ACCT-1234567890",
-			expectedOutput: "Transaction: [HIDDEN]",
+			// Expect: [HIDDEN:HexHash] (Wait, redactWithHMAC adds extra colon if name empty? Let's check logic)
+			// Logic: if name != "" { append :name }; append :hash
+			// So if name is empty: [HIDDEN:hash]
+			expectedOutput: `Transaction: \[HIDDEN:[a-f0-9]{6}\]`,
 		},
 		{
 			name:           "Case Insensitivity (Implicit in Pattern)",
 			regexConfig:    `[{"pattern": "(?i)^acct-[0-9]{10}$", "name": "Account"}]`,
 			input:          "ID: ACCT-1234567890",
-			expectedOutput: "ID: [HIDDEN:Account]",
+			expectedOutput: `ID: \[HIDDEN:Account:[a-f0-9]{6}\]`,
 		},
 		{
 			name:           "False Positive Check (Short)",
@@ -53,7 +58,7 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 			name:           "Multiple Regexes",
 			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": "Account"}, {"pattern": "^TX-[0-9]{5}$", "name": "TX"}]`,
 			input:          "ID: ACCT-1234567890 Ref: TX-12345",
-			expectedOutput: "ID: [HIDDEN:Account] Ref: [HIDDEN:TX]",
+			expectedOutput: `ID: \[HIDDEN:Account:[a-f0-9]{6}\] Ref: \[HIDDEN:TX:[a-f0-9]{6}\]`,
 		},
 		{
 			name:           "No Config",
@@ -65,11 +70,6 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Manually inject config for test purposes since we can't easily re-run init()
-			// But wait, loadConfig reads env vars. We can set env var and call loadConfig,
-			// or manually construct the config struct.
-			// Manually constructing is safer/cleaner for unit tests to avoid side effects.
-
 			tConfig := originalConfig // Copy defaults
 			tConfig.CustomRegexes = []CustomRegexRule{} // Reset
 
@@ -90,8 +90,18 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 			currentConfig.EntropyThreshold = 100.0
 
 			got := ScanAndRedact(tt.input)
-			if got != tt.expectedOutput {
-				t.Errorf("ScanAndRedact() = %v, want %v", got, tt.expectedOutput)
+			
+			// CHANGED: Use Regex to verify output because Hash is dynamic/random if salt is random
+			// We expect [HIDDEN:Name:Hash] or [HIDDEN:Hash]
+			// The original expectedOutput in struct is just the prefix part for simplicity, OR we update the struct to be a regex.
+			// Let's treat tt.expectedOutput as a REGEX pattern now.
+			
+			matched, err := regexp.MatchString(tt.expectedOutput, got)
+			if err != nil {
+				t.Fatalf("Invalid regex in test case: %v", err)
+			}
+			if !matched {
+				t.Errorf("ScanAndRedact() = %v, want match %v", got, tt.expectedOutput)
 			}
 		})
 	}

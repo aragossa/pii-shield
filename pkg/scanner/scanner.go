@@ -432,7 +432,7 @@ func calculateBigramAdjustment(token string) float64 {
 	return 0.0
 }
 
-func redactWithHMAC(sensitiveData string, sb *strings.Builder) {
+func redactWithHMAC(sensitiveData string, name string, sb *strings.Builder) {
 	mac := hmacPool.Get().(hash.Hash)
 	defer hmacPool.Put(mac)
 
@@ -443,8 +443,17 @@ func redactWithHMAC(sensitiveData string, sb *strings.Builder) {
 	var buf [32]byte
 	sum := mac.Sum(buf[:0])
 
-	// Write [HIDDEN:
-	sb.WriteString("[HIDDEN:")
+	// Write [HIDDEN
+	sb.WriteString("[HIDDEN")
+
+	// Optional Name
+	if name != "" {
+		sb.WriteRune(':')
+		sb.WriteString(name)
+	}
+
+	// Separator for hash
+	sb.WriteRune(':')
 	
 	// Hex encode first 3 bytes (6 chars) directly to builder
 	// We can manually hex encode to avoid string conv
@@ -461,7 +470,7 @@ func redactString(sensitiveData string) string {
 	sb := bufferPool.Get().(*strings.Builder)
 	sb.Reset()
 	defer bufferPool.Put(sb)
-	redactWithHMAC(sensitiveData, sb)
+	redactWithHMAC(sensitiveData, "", sb)
 	return sb.String()
 }
 
@@ -525,7 +534,7 @@ func scanLine(logLine string, sb *strings.Builder) {
 		}
 
 		secret := logLine[lr.Start:lr.End]
-		redactWithHMAC(secret, sb)
+		redactWithHMAC(secret, "", sb)
 
 		chunkStart = lr.End
 	}
@@ -735,12 +744,10 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 				if needsQuotes {
 					sb.WriteRune('"')
 				}
-				sb.WriteString("[HIDDEN")
-				if matchName != "" {
-					sb.WriteRune(':')
-					sb.WriteString(matchName)
-				}
-				sb.WriteRune(']')
+				
+				// Use hashed redaction for Custom Regex
+				redactWithHMAC(content, matchName, sb)
+				
 				if needsQuotes {
 					sb.WriteRune('"')
 				}
@@ -750,7 +757,7 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
              // ... fallback ...
 			for _, rule := range currentConfig.CustomRegexes {
 				if rule.Regexp.MatchString(content) {
-                    // ... redaction ...
+                    					// ... redaction ...
 					needsQuotes := false
 					if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
 						needsQuotes = true
@@ -764,12 +771,10 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 					if needsQuotes {
 						sb.WriteRune('"')
 					}
-					sb.WriteString("[HIDDEN")
-					if rule.Name != "" {
-						sb.WriteRune(':')
-						sb.WriteString(rule.Name)
-					}
-					sb.WriteRune(']')
+					
+					// Use hashed redaction for Custom Regex
+					redactWithHMAC(content, rule.Name, sb)
+					
 					if needsQuotes {
 						sb.WriteRune('"')
 					}
@@ -818,7 +823,7 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 		if needsQuotes {
 			sb.WriteRune('"')
 		}
-		redactWithHMAC(content, sb)
+		redactWithHMAC(content, "", sb)
 		if needsQuotes {
 			sb.WriteRune('"')
 		}
@@ -1023,13 +1028,13 @@ func maskURLParameters(url string, sb *strings.Builder) {
 			if isSensitiveKey(key) {
 				sb.WriteString(key)
 				sb.WriteRune('=')
-				redactWithHMAC(val, sb)
+				redactWithHMAC(val, "", sb)
 			} else {
 				score := CalculateComplexity(val)
 				if score > currentConfig.EntropyThreshold {
 					sb.WriteString(key)
 					sb.WriteRune('=')
-					redactWithHMAC(val, sb)
+					redactWithHMAC(val, "", sb)
 				} else {
 					sb.WriteString(param)
 				}
