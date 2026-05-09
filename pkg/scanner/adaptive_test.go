@@ -62,11 +62,10 @@ func TestBaselineStats_HardReset(t *testing.T) {
 	if stats.ready != false {
 		t.Error("Expected ready to be false after hard reset")
 	}
-	
+
 	// 4. Verify it can start over perfectly
 	stats.Update(1.0)
 	if len(stats.samples) != 1 {
 		t.Errorf("Expected 1 sample after starting over, got %d", len(stats.samples))
 	}
 }
-

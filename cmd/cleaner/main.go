@@ -25,7 +25,7 @@ func main() {
 		if port == "" {
 			port = "9090"
 		}
-		
+
 		// Wire metrics callback
 		scanner.RedactionCallback = metrics.IncrementRedaction
 
@@ -40,7 +40,7 @@ func main() {
 
 	failPolicy := os.Getenv("PII_FAIL_POLICY")
 	if failPolicy == "" {
-		failPolicy = "open" // Start with fail-open by default 
+		failPolicy = "open" // Start with fail-open by default
 	}
 
 	var watchFile string
@@ -79,7 +79,9 @@ func main() {
 
 		go func() {
 			<-sigChan
-			t.Stop()
+			if err := t.Stop(); err != nil {
+				log.Printf("Failed to stop tail: %v", err)
+			}
 		}()
 
 		for line := range t.Lines {
@@ -132,7 +134,7 @@ func processLine(text string, metricsEnabled bool, failPolicy string) {
 				if failPolicy == "closed" {
 					fmt.Println("[PII_SHIELD_DROP: FATAL_ERROR]")
 				} else {
-					// Fail-Open: keep the flow alive 
+					// Fail-Open: keep the flow alive
 					fmt.Println(text)
 				}
 			}

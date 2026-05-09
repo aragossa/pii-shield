@@ -55,7 +55,7 @@ func TestLoadConfigEdgeCases(t *testing.T) {
 	if !reflect.DeepEqual(cfg.SensitiveKeys, expectedKeys) {
 		t.Errorf("expected sensitive keys %v, got: %v", expectedKeys, cfg.SensitiveKeys)
 	}
-	
+
 	// Ensure UpdateConfig functions well
 	UpdateConfig(cfg)
 }

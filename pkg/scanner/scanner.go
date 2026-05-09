@@ -21,7 +21,7 @@ import (
 // Config holds scanner configuration parameters.
 type Config struct {
 	EntropyThreshold        float64
-	ConfidenceThreshold     float64  // Hybrid validation confidence
+	ConfidenceThreshold     float64 // Hybrid validation confidence
 	MinSecretLength         int
 	Salt                    []byte
 	SensitiveKeys           []string
@@ -32,8 +32,8 @@ type Config struct {
 	AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
 	CustomRegexes           []CustomRegexRule
 	SafeRegexes             []CustomRegexRule
-	CombinedCustomRegex     *regexp.Regexp    // Optimized "Mega-Regex" (O(1) match)
-	CustomRegexNames        []string          // Names corresponding to CombinedCustomRegex submatches
+	CombinedCustomRegex     *regexp.Regexp // Optimized "Mega-Regex" (O(1) match)
+	CustomRegexNames        []string       // Names corresponding to CombinedCustomRegex submatches
 }
 
 // CustomRegexConfig is the DTO for JSON unmarshalling from environment variables.
@@ -126,13 +126,13 @@ func parseInt(s string) (int, error) {
 
 func loadConfig() Config {
 	cfg := Config{
-		EntropyThreshold:        DefaultEntropyThreshold,   // Adjusted for bigrams
-		ConfidenceThreshold:     1.0,   // High confidence required to skip false positives
-		MinSecretLength:         6,     // Lower minimal length as we have better context
-		DisableBigramCheck:      false, // Enable bigram check by default
-		BigramDefaultScore:      -7.0,  // Default for unknown bigrams
-		AdaptiveThreshold:       false, // Disabled by default (User feedback)
-		AdaptiveBaselineSamples: 100,   // Default baseline sample size
+		EntropyThreshold:        DefaultEntropyThreshold, // Adjusted for bigrams
+		ConfidenceThreshold:     1.0,                     // High confidence required to skip false positives
+		MinSecretLength:         6,                       // Lower minimal length as we have better context
+		DisableBigramCheck:      false,                   // Enable bigram check by default
+		BigramDefaultScore:      -7.0,                    // Default for unknown bigrams
+		AdaptiveThreshold:       false,                   // Disabled by default (User feedback)
+		AdaptiveBaselineSamples: 100,                     // Default baseline sample size
 	}
 
 	// Load Salt - CRITICAL SECURITY: Try secure, fallback to error log (don't panic library)
@@ -238,11 +238,11 @@ func loadConfig() Config {
 			if _, err := regexp.Compile(rule.Pattern); err != nil {
 				log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid regex '%s': %v", rule.Pattern, err)
 			}
-			
+
 			// Add to combined list - wrapped in capturing group to identify which one matched
 			patterns = append(patterns, "("+rule.Pattern+")")
 			names = append(names, rule.Name)
-			
+
 			// Keep individual rules for backward compatibility (or remove if fully fully switched)
 			// processSingleToken uses CombinedCustomRegex now.
 			// existing tests might check cfg.CustomRegexes?
@@ -461,7 +461,7 @@ func redactWithHMAC(sensitiveData string, name string, strategy string, sb *stri
 
 	mac.Reset()
 	mac.Write([]byte(sensitiveData))
-	
+
 	// Zero-allocation hex encoding using stack buffer
 	var buf [32]byte
 	sum := mac.Sum(buf[:0])
@@ -477,13 +477,13 @@ func redactWithHMAC(sensitiveData string, name string, strategy string, sb *stri
 
 	// Separator for hash
 	sb.WriteRune(':')
-	
+
 	// Hex encode first 3 bytes (6 chars) directly to builder
 	// We can manually hex encode to avoid string conv
 	dst := make([]byte, 6)
 	hex.Encode(dst, sum[:3])
 	sb.Write(dst)
-	
+
 	sb.WriteString("]")
 }
 
@@ -528,23 +528,27 @@ func scanLine(logLine string, sb *strings.Builder) {
 		return
 	}
 
-	trimmed := strings.TrimSpace(logLine)
+	// TODO: verify if needed or can be removed
+	/*
+		trimmed := strings.TrimSpace(logLine)
 
-	// URL Optimization
-	if strings.HasPrefix(trimmed, "GET ") || strings.HasPrefix(trimmed, "POST ") || strings.Contains(trimmed, "://") {
-		// Rely on scanSegment
-	}
+		// URL Optimization
+
+		if strings.HasPrefix(trimmed, "GET ") || strings.HasPrefix(trimmed, "POST ") || strings.Contains(trimmed, "://") {
+			// Rely on scanSegment
+		}
+	*/
 
 	// OPTIMIZATION PHASE 3: Disable processJSONLine
 	// Standard JSON parsing is too slow. Our tokenizer handles JSON structure (quotes, braces) naturally.
 	// This removes the map[string]interface{} boxing overhead.
 	/*
-	if strings.HasPrefix(trimmed, "{") {
-		if jsonProcessed, ok := processJSONLine(trimmed); ok {
-			sb.WriteString(jsonProcessed)
-			return
+		if strings.HasPrefix(trimmed, "{") {
+			if jsonProcessed, ok := processJSONLine(trimmed); ok {
+				sb.WriteString(jsonProcessed)
+				return
+			}
 		}
-	}
 	*/
 
 	luhnRanges := FindLuhnSequences(logLine)
@@ -696,8 +700,8 @@ func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive b
 		}
 	} else {
 		// Optimization Phase 3 Regression Fix:
-		// If we are in a Value position, and the value is a quoted string, 
-		// we must "unwrap" it and scan the specific content for embedded secrets 
+		// If we are in a Value position, and the value is a quoted string,
+		// we must "unwrap" it and scan the specific content for embedded secrets
 		// (e.g. JSON fields containing long error messages or nested structures).
 		// We only do this if NOT forcedSensitive (if forced, we redact the whole thing anyway).
 		if !forcedSensitive && len(rawToken) >= 2 {
@@ -789,20 +793,20 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 				if needsQuotes {
 					sb.WriteRune('"')
 				}
-				
+
 				// Use hashed redaction for Custom Regex
 				redactWithHMAC(content, matchName, "regex", sb)
-				
+
 				if needsQuotes {
 					sb.WriteRune('"')
 				}
 				return
 			}
 		} else {
-             // ... fallback ...
+			// ... fallback ...
 			for _, rule := range currentConfig.CustomRegexes {
 				if rule.Regexp.MatchString(content) {
-                    					// ... redaction ...
+					// ... redaction ...
 					needsQuotes := false
 					if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
 						needsQuotes = true
@@ -816,10 +820,10 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 					if needsQuotes {
 						sb.WriteRune('"')
 					}
-					
+
 					// Use hashed redaction for Custom Regex
 					redactWithHMAC(content, rule.Name, "regex", sb)
-					
+
 					if needsQuotes {
 						sb.WriteRune('"')
 					}
@@ -960,19 +964,19 @@ func processEqualPair(rawToken string, forcedSensitive bool, overrideSensitivity
 		// Unquoted Key=Value
 		key := rawToken[:idx] // Up to =
 		val := rawToken[idx+1:]
-		
+
 		keySensitive := isSensitiveKey(key) || overrideSensitivity
 
 		sb.WriteString(key)
 		sb.WriteRune('=')
-		
+
 		if containsSep := strings.Contains(val, "=") || strings.Contains(val, ":"); containsSep && !keySensitive {
 			// Recursive handling for "data=key=val" where "data" is safe.
 			processTokenLogic(val, false, false, false, overrideSensitivity, sb)
 		} else {
 			processSingleToken(val, val, keySensitive, false, false, sb)
 		}
-		
+
 		return keySensitive && val == "", true
 	}
 	return false, false
@@ -985,7 +989,7 @@ func processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Bui
 	// Fix: Only split on colon if it's NOT inside quotes
 	// e.g. "Error: msg" -> Should NOT split
 	// "key": val -> Should split (colon after quote)
-	
+
 	idx := -1
 	if strings.HasPrefix(rawToken, "\"") || strings.HasPrefix(rawToken, "'") {
 		// Quoted token: Find end quote
@@ -1002,7 +1006,7 @@ func processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Bui
 				idx = realEnd + 1 + colIdx
 			}
 		} else {
-			// Unbalanced or strict string? Fallback to normal index? 
+			// Unbalanced or strict string? Fallback to normal index?
 			// If unbalanced, treat as normal string.
 			idx = strings.IndexByte(rawToken, ':')
 		}
@@ -1015,10 +1019,10 @@ func processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Bui
 			sb.WriteString(rawToken)
 			return false, true
 		}
-		
+
 		keyRaw := rawToken[:idx]
 		val := rawToken[idx+1:]
-		
+
 		key := trimQuotes(keyRaw)
 		keySensitive := isSensitiveKey(key) || overrideSensitivity
 
@@ -1027,11 +1031,11 @@ func processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Bui
 			sb.WriteString(rawToken)
 			return keySensitive, true
 		}
-		
+
 		sb.WriteString(keyRaw) // Write original key (with quotes)
 		sb.WriteRune(':')
 		processSingleToken(val, val, keySensitive, false, false, sb)
-		
+
 		return keySensitive, true
 	}
 	return false, false
@@ -1202,7 +1206,7 @@ func isIPv6(token string) bool {
 	if strings.Count(token, ":") >= 2 {
 		isIPv6 := true
 		for _, r := range token {
-			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') || r == ':') {
+			if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') && r != ':' {
 				isIPv6 = false
 				break
 			}
@@ -1261,7 +1265,7 @@ func isSSHKey(token string) bool {
 		// Minimal Base64 check (just charset)
 		isBase64 := true
 		for _, r := range token {
-			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '+' || r == '/' || r == '=') {
+			if (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '+' && r != '/' && r != '=' {
 				isBase64 = false
 				break
 			}
@@ -1320,7 +1324,7 @@ func FindLuhnSequences(line string) []Range {
 	// Optimization: Use sync.Pool for digitIndices to avoid allocation per line
 	digitIndicesPtr := luhnPool.Get().(*[]int)
 	defer luhnPool.Put(digitIndicesPtr)
-	
+
 	// Reset slice length to 0, keep capacity
 	digitIndices := (*digitIndicesPtr)[:0]
 
@@ -1493,24 +1497,6 @@ func isDigits(s string) bool {
 	return true
 }
 
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
-		return false
-	}
-	for i, r := range s {
-		if i == 8 || i == 13 || i == 18 || i == 23 {
-			continue
-		}
-		if !isHex(r) {
-			return false
-		}
-	}
-	return true
-}
-
 func isHex(r rune) bool {
 	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
@@ -1656,10 +1642,10 @@ type segmentState struct {
 	pendingKeySensitive     bool
 	pendingContextSensitive bool // NEW: For "Error: secret"
 	isInValuePos            bool // Tracks if we are physically after a ':' or '=' separator
-	
+
 	// Generic KV Support
-	pendingGenericKey       bool // True if last key was "key", "name"
-	nextValueIsSensitive    bool // True if "key"="password", so next "value" is sensitive
+	pendingGenericKey    bool // True if last key was "key", "name"
+	nextValueIsSensitive bool // True if "key"="password", so next "value" is sensitive
 }
 
 func processAndAppend(token string, sb *strings.Builder, state *segmentState) {
@@ -1672,10 +1658,10 @@ func processAndAppend(token string, sb *strings.Builder, state *segmentState) {
 	}
 	cleanToken = trimQuotes(cleanToken)
 	lowerClean := strings.ToLower(cleanToken)
-	
+
 	// Check if this token is a "Generic Key" identifier (e.g. "key", "name")
 	isGenericKeyName := lowerClean == "key" || lowerClean == "name" || lowerClean == "setting"
-	
+
 	// 1. Process Token
 	isKey := processTokenLogic(token, state.pendingKeySensitive, state.pendingContextSensitive, state.isInValuePos, state.nextValueIsSensitive, sb)
 	// sb is updated inside processTokenLogic
@@ -1685,7 +1671,7 @@ func processAndAppend(token string, sb *strings.Builder, state *segmentState) {
 		state.pendingKeySensitive = true // Next token (value) will be redacted
 		// Reset expectation since we found the key
 		state.nextValueIsSensitive = false
-		
+
 		if isGenericKeyName {
 			state.pendingGenericKey = true
 		} else {
@@ -1695,7 +1681,7 @@ func processAndAppend(token string, sb *strings.Builder, state *segmentState) {
 		// Value Position
 		if state.isInValuePos {
 			state.pendingKeySensitive = false
-			
+
 			// If we were waiting for the value of a Generic Key...
 			if state.pendingGenericKey {
 				// Check if THIS value is a sensitive key name (e.g. "password")

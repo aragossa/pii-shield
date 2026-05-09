@@ -102,7 +102,7 @@ func BenchmarkBlacklist_Regex(b *testing.B) {
 	pattern := `(?i)(custom_secret|super_confidential)`
 	re := regexp.MustCompile(pattern)
 	sensitiveRegex = re // Direct assignment for test
-	
+
 	// A key NOT in static list, but matches regex
 	key := "custom_secret"
 
