@@ -154,19 +154,5 @@ This project is verified with a comprehensive testing suite, ensuring production
 3. **Smoke Testing**: `./run_smoke.sh` validates 100% detection accuracy on mixed workloads.
 4. **End-to-End (E2E) Testing**: The `operator/tests/run_e2e.sh` suite performs full-stack validation using Minikube and Helm. It builds local images, provisions the Operator without cert-manager, deploys target Jobs, and verifies actual log redaction by intercepting sidecar outputs.
 
-## 💖 Support & Enterprise Sponsorship
-PII-Shield helps prevent sensitive data (PII) from leaking into logs, APIs, and AI pipelines — reducing compliance risks and potential data exposure in production systems.
-If your team relies on PII-Shield in production, consider supporting its development.
-Sponsorship directly funds:
-- Faster and more accurate PII detection
-- Performance improvements for high-throughput systems
-- New detectors for real-world data leaks
-**Enterprise sponsors receive:**
-- Priority support for production issues
-- Faster issue triage and feature prioritization
-- Guidance on integrating PII-Shield into your stack
-- Optional visibility (logo) in the repository
-[**➔ View Sponsorship Tiers on GitHub**](https://github.com/sponsors/aragossa)
-
 ## License
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.
