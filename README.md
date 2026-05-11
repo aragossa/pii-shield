@@ -5,11 +5,11 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
 ![Docker Pulls](https://img.shields.io/docker/pulls/thelisdeep/pii-shield)
-![Go Report Card](https://goreportcard.com/badge/github.com/aragossa/pii-shield?v=1)
-![Go Reference](https://pkg.go.dev/badge/github.com/aragossa/pii-shield.svg)
-![Build Status](https://github.com/aragossa/pii-shield/actions/workflows/test.yml/badge.svg)
-![Coverage Status](https://codecov.io/gh/aragossa/pii-shield/branch/main/graph/badge.svg)
-![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/aragossa/pii-shield?sort=semver)
+![Go Report Card](https://goreportcard.com/badge/github.com/pii-shield/pii-shield?v=1)
+![Go Reference](https://pkg.go.dev/badge/github.com/pii-shield/pii-shield.svg)
+![Build Status](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg)
+![Coverage Status](https://codecov.io/gh/pii-shield/pii-shield/branch/main/graph/badge.svg)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/pii-shield/pii-shield?sort=semver)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)
 ![PyPI Downloads](https://img.shields.io/pypi/dm/pii-shield-wasi?label=PyPI%20Downloads&color=blue)
 ![npm Downloads](https://img.shields.io/npm/dw/@aragossa/pii-shield-wasi?label=npm%20Downloads&color=green)
@@ -75,7 +75,7 @@ Get the latest lightweight image from Docker Hub or GHCR:
 ```bash
 docker pull thelisdeep/pii-shield:v2.0.0
 # OR from GitHub Container Registry (Enterprise):
-docker pull ghcr.io/aragossa/pii-shield:v2.0.0
+docker pull ghcr.io/pii-shield/pii-shield:v2.0.0
 ```
 
 ### Build from Source
@@ -110,7 +110,7 @@ You can pipe any log output through PII-Shield to see it in action immediately:
 
 ```bash
 # Emulate a log with a sensitive password
-echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/aragossa/pii-shield:v2.0.0
+echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/pii-shield/pii-shield:v2.0.0
 
 # Output: Error: User password=[HIDDEN:8f3a11] failed login
 ```

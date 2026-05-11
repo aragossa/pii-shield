@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/aragossa/pii-shield"
+"Homepage" = "https://github.com/pii-shield/pii-shield"
 
 [tool.setuptools]
 packages = ["pii_shield"]

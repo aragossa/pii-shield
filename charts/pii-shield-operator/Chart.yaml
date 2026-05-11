@@ -8,11 +8,11 @@ version: 2.0.0
 
 appVersion: "2.0.0"
 
-icon: https://raw.githubusercontent.com/aragossa/pii-shield/main/docs/assets/logo.png
+icon: https://raw.githubusercontent.com/pii-shield/pii-shield/main/docs/assets/logo.png
 
-home: https://github.com/aragossa/pii-shield
+home: https://github.com/pii-shield/pii-shield
 sources:
-  - https://github.com/aragossa/pii-shield
+  - https://github.com/pii-shield/pii-shield
 maintainers:
   - name: aragossa
     email: ilya.ploskovitov@pii-shield.com
@@ -22,6 +22,6 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/links: |
     - name: Documentation
-      url: https://github.com/aragossa/pii-shield/tree/main/operator
+      url: https://github.com/pii-shield/pii-shield/tree/main/operator
     - name: GitHub
-      url: https://github.com/aragossa/pii-shield
+      url: https://github.com/pii-shield/pii-shield

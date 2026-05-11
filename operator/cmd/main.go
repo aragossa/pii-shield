@@ -36,9 +36,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	corev1alpha1 "github.com/aragossa/pii-shield/operator/api/v1alpha1"
-	"github.com/aragossa/pii-shield/operator/internal/controller"
-	piiwebhook "github.com/aragossa/pii-shield/operator/internal/webhook"
+	corev1alpha1 "github.com/pii-shield/pii-shield/operator/api/v1alpha1"
+	"github.com/pii-shield/pii-shield/operator/internal/controller"
+	piiwebhook "github.com/pii-shield/pii-shield/operator/internal/webhook"
 	// +kubebuilder:scaffold:imports
 )
 

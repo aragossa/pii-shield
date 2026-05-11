@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	piishieldv1alpha1 "github.com/aragossa/pii-shield/operator/api/v1alpha1"
+	piishieldv1alpha1 "github.com/pii-shield/pii-shield/operator/api/v1alpha1"
 )
 
 func TestInjectFileMode(t *testing.T) {

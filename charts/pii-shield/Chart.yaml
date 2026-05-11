@@ -7,9 +7,9 @@ appVersion: "2.0.0"
 
 annotations:
   artifacthub.io/official: "true"
-home: https://github.com/aragossa/pii-shield
+home: https://github.com/pii-shield/pii-shield
 sources:
-  - https://github.com/aragossa/pii-shield
+  - https://github.com/pii-shield/pii-shield
 keywords:
   - security
   - observability

@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	corev1alpha1 "github.com/aragossa/pii-shield/operator/api/v1alpha1"
+	corev1alpha1 "github.com/pii-shield/pii-shield/operator/api/v1alpha1"
 )
 
 var _ = Describe("PiiPolicy Controller", func() {

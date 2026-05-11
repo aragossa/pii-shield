@@ -1,6 +1,6 @@
 # PII-Shield Operator
 
-The Kubernetes Operator for [PII-Shield](https://github.com/aragossa/pii-shield), providing automatic Personally Identifiable Information masking for application logs in K8s clusters using Distroless Native Sidecars.
+The Kubernetes Operator for [PII-Shield](https://github.com/pii-shield/pii-shield), providing automatic Personally Identifiable Information masking for application logs in K8s clusters using Distroless Native Sidecars.
 
 ## Architecture
 
