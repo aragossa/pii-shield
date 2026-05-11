@@ -14,8 +14,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/aragossa/pii-shield/pkg/metrics"
-	"github.com/aragossa/pii-shield/pkg/scanner"
+	"github.com/pii-shield/pii-shield/pkg/metrics"
+	"github.com/pii-shield/pii-shield/pkg/scanner"
 )
 
 func main() {

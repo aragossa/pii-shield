@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"unsafe"
 
-	"github.com/aragossa/pii-shield/pkg/scanner"
+	"github.com/pii-shield/pii-shield/pkg/scanner"
 )
 
 // ConfigFromSDK represents configuration passed from Python/Node.js SDKs
