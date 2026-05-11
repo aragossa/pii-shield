@@ -147,4 +147,31 @@ entries:
     urls:
     - https://github.com/aragossa/pii-shield/releases/download/pii-shield-1.2.1/pii-shield-1.2.1.tgz
     version: 1.2.1
-generated: "2026-04-29T18:30:08.489881003Z"
+  pii-shield-operator:
+  - annotations:
+      artifacthub.io/category: security
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/pii-shield/pii-shield/tree/main/operator
+        - name: GitHub
+          url: https://github.com/pii-shield/pii-shield
+    apiVersion: v2
+    appVersion: 2.0.0
+    created: "2026-05-11T20:02:07.722549053Z"
+    description: A Kubernetes Operator for automatic PII (Personally Identifiable
+      Information) masking in application logs using native distroless sidecars.
+    digest: 0b67bdeaf0af3d9bb0e49bb140f78d2680e1dbdb1013809c72bf57fc50e1ffdd
+    home: https://github.com/pii-shield/pii-shield
+    icon: https://raw.githubusercontent.com/pii-shield/pii-shield/main/docs/assets/logo.png
+    maintainers:
+    - email: ilya.ploskovitov@pii-shield.com
+      name: aragossa
+    name: pii-shield-operator
+    sources:
+    - https://github.com/pii-shield/pii-shield
+    type: application
+    urls:
+    - https://github.com/pii-shield/pii-shield/releases/download/pii-shield-operator-2.0.0/pii-shield-operator-2.0.0.tgz
+    version: 2.0.0
+generated: "2026-05-11T20:02:07.722578478Z"
