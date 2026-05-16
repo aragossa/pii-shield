@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/aragossa/pii-shield-operator
+  repository: ghcr.io/pii-shield/pii-shield-operator
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
@@ -59,7 +59,7 @@ webhook:
 # Advanced Configuration for the PII-Shield Agent injected into Pods
 sidecar:
   image:
-    repository: ghcr.io/aragossa/pii-shield-agent
+    repository: ghcr.io/pii-shield/pii-shield-agent
     tag: ""
   # fsGroup to inject into the mutated pod if none is specified
   fsGroup: 65532

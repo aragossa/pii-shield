@@ -1,4 +1,4 @@
-module github.com/aragossa/pii-shield/operator
+module github.com/pii-shield/pii-shield/operator
 
 go 1.25.3
 

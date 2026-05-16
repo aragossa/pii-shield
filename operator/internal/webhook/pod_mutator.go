@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	piishieldv1alpha1 "github.com/aragossa/pii-shield/operator/api/v1alpha1"
+	piishieldv1alpha1 "github.com/pii-shield/pii-shield/operator/api/v1alpha1"
 )
 
 // PodMutator mutates Pods
@@ -239,7 +239,7 @@ func (m *PodMutator) injectEBPFMode(pod *corev1.Pod, policy *piishieldv1alpha1.P
 
 	sidecar := corev1.Container{
 		Name:    "pii-shield-sidecar",
-		Image:   "ghcr.io/aragossa/pii-shield:v2.0.0-ebpf",
+		Image:   "ghcr.io/pii-shield/pii-shield:v2.0.0-ebpf",
 		Command: []string{"/bin/sh", "-c"},
 		Args:    []string{fmt.Sprintf("pii-shield-ebpf --target-process=\"%s\"", appName)},
 		SecurityContext: &corev1.SecurityContext{

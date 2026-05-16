@@ -7,7 +7,7 @@ domain: pii-shield.io
 layout:
 - go.kubebuilder.io/v4
 projectName: operator
-repo: github.com/aragossa/pii-shield/operator
+repo: github.com/pii-shield/pii-shield/operator
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: pii-shield.io
   group: core
   kind: PiiPolicy
-  path: github.com/aragossa/pii-shield/operator/api/v1alpha1
+  path: github.com/pii-shield/pii-shield/operator/api/v1alpha1
   version: v1alpha1
 - core: true
   group: core

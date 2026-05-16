@@ -7,8 +7,8 @@ OPERATOR_NAMESPACE="operator-system"
 APP_NAMESPACE="default"
 HELM_RELEASE="pii-shield-operator"
 IMAGE_TAG="e2e-test-$(date +%s)"
-OPERATOR_IMAGE="ghcr.io/aragossa/pii-shield-operator:${IMAGE_TAG}"
-AGENT_IMAGE="ghcr.io/aragossa/pii-shield-agent:${IMAGE_TAG}"
+OPERATOR_IMAGE="ghcr.io/pii-shield/pii-shield-operator:${IMAGE_TAG}"
+AGENT_IMAGE="ghcr.io/pii-shield/pii-shield-agent:${IMAGE_TAG}"
 
 echo "🚀 Starting PII-Shield Operator E2E Tests..."
 
@@ -51,9 +51,9 @@ fi
 echo "⚙️ Installing Helm Chart..."
 helm upgrade --install ${HELM_RELEASE} ../charts/pii-shield-operator \
   -n ${OPERATOR_NAMESPACE} --create-namespace \
-  --set image.repository="ghcr.io/aragossa/pii-shield-operator" \
+  --set image.repository="ghcr.io/pii-shield/pii-shield-operator" \
   --set image.tag="${IMAGE_TAG}" \
-  --set sidecar.image.repository="ghcr.io/aragossa/pii-shield-agent" \
+  --set sidecar.image.repository="ghcr.io/pii-shield/pii-shield-agent" \
   --set sidecar.image.tag="${IMAGE_TAG}" \
   --set webhook.useCertManager=false \
   --wait --timeout=120s

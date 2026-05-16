@@ -1,4 +1,4 @@
-module github.com/aragossa/pii-shield
+module github.com/pii-shield/pii-shield
 
 go 1.26
 
