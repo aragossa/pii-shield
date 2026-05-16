@@ -15,7 +15,7 @@ The easiest way to install the operator is via our official Helm chart hosted on
 
 1. Add the Helm repository:
    ```bash
-   helm repo add pii-shield https://aragossa.github.io/pii-shield
+   helm repo add pii-shield https://pii-shield.github.io/pii-shield
    helm repo update
    ```
 

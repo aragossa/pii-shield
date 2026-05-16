@@ -24,7 +24,7 @@ PII-Shield is built for extreme performance. This chart explicitly defines the f
 Assuming you have added the repository:
 
 ```bash
-helm repo add pii-shield https://aragossa.github.io/pii-shield/
+helm repo add pii-shield https://pii-shield.github.io/pii-shield/
 helm install my-demo pii-shield/pii-shield
 ```
 

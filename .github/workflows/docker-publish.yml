@@ -50,7 +50,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY }}/aragossa/${{ matrix.component.name }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.component.name }}
             thelisdeep/${{ matrix.component.name }}
           tags: |
             type=semver,pattern={{version}}

@@ -8,8 +8,6 @@ version: 2.0.0
 
 appVersion: "2.0.0"
 
-icon: https://raw.githubusercontent.com/aragossa/pii-shield/main/docs/assets/logo.png
-
 home: https://github.com/aragossa/pii-shield
 sources:
   - https://github.com/aragossa/pii-shield

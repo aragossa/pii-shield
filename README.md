@@ -64,7 +64,7 @@ While PII-Shield is highly optimized, deep inspection of complex logs requires c
 The official and recommended way to deploy PII-Shield in Kubernetes is via our fully-automated Operator:
 
 ```bash
-helm repo add pii-shield https://aragossa.github.io/pii-shield/
+helm repo add pii-shield https://pii-shield.github.io/pii-shield/
 helm repo update
 helm install pii-shield-operator pii-shield/pii-shield-operator -n operator-system --create-namespace
 ```
