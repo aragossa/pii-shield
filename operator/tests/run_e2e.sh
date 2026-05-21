@@ -79,7 +79,7 @@ echo "🚀 Deploying test-job..."
 kubectl apply -f tests/test-job.yaml -n ${APP_NAMESPACE}
 
 # Wait for Job Pod to be created
-echo "⏳ Ожидание создания пода от Job..."
+echo "⏳ Waiting for the Job pod to be created..."
 while [[ $(kubectl get pods -l job-name=test-job -n ${APP_NAMESPACE} -o jsonpath='{.items}') == "[]" ]]; do
   sleep 1
 done
@@ -93,9 +93,9 @@ if ! kubectl wait --for=condition=ready pod -l job-name=test-job -n ${APP_NAMESP
   exit 1
 fi
 
-# Быстрая проверка на падение
+# Quick failure check
 if kubectl get pod -l job-name=test-job -n ${APP_NAMESPACE} -o jsonpath='{.items[0].status.phase}' | grep -q "Failed"; then
-  echo "❌ Ошибка: Pod завершился со статусом Failed"
+  echo "❌ Error: Pod finished with Failed status"
   kubectl describe pod -l job-name=test-job -n ${APP_NAMESPACE}
   exit 1
 fi
@@ -136,7 +136,7 @@ if [ "$SUCCESS_HIDDEN" = false ]; then
 fi
 
 if [ "$SUCCESS_SAFE" = false ]; then
-  echo "❌ Error: Ложное срабатывание: безопасные данные были повреждены или не найдены."
+  echo "❌ Error: False positive: safe data was modified or not found."
   echo "--- Sidecar Logs ---"
   kubectl logs -l job-name=test-job -c pii-shield-sidecar -n ${APP_NAMESPACE}
   exit 1
