@@ -13,6 +13,7 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)
 ![PyPI Downloads](https://img.shields.io/pypi/dm/pii-shield-wasi?label=PyPI%20Downloads&color=blue)
 ![npm Downloads](https://img.shields.io/npm/dw/@aragossa/pii-shield-wasi?label=npm%20Downloads&color=green)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/pii-shield)
 
 "Don't let PII poison your AI models." PII-Shield ensures that sensitive data never reaches your training dataset, saving you from GDPR-forced model retraining.
 
@@ -27,15 +28,31 @@ PII-Shield offers two distinct ways to integrate into your stack:
 1. **Kubernetes Operator (Zero-code)**: Our flagship deployment model. A fully automated K8s Operator that injects a highly-secure Distroless Sidecar into your pods to intercept and sanitize logs on the fly.
 2. **In-Process WASM (For core integrations)**: For extreme performance, the core engine can be embedded directly via WASM, providing `<1ms` latency without network hops.
 
+## Project Status & Roadmap
+
+PII-Shield is an active open-source MVP moving through production hardening. The core scanner and CLI sidecar are usable for local streams and controlled deployments, while the Kubernetes operator and SDK surfaces are in beta stabilization.
+
+| Component | Status |
+| --- | --- |
+| Core scanner | Active MVP / Beta |
+| CLI sidecar | Beta |
+| Kubernetes operator | Stabilization phase |
+| WASM SDKs | Beta |
+| Proxy-Wasm gateway integration | Planned R&D |
+| Control Plane UI | Planned R&D |
+| eBPF interception | Planned R&D |
+
+See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the current production-hardening boundaries.
+
 ## Why PII-Shield?
 
 Developers often forget to mask sensitive data. Traditional regex filters in Fluentd/Logstash are slow, hard to maintain, and consume expensive CPU on log aggregators.
 
 **PII-Shield sits right next to your app container:**
-- **Production Ready:** Optimized for Kubernetes sidecars with **ultra-low memory allocations** (zero-GC overhead on hot paths) and deterministic O(1) regex matching.
+- **Beta Core Engine:** Optimized for Kubernetes sidecars with low memory allocations on hot paths and deterministic regex matching.
 - **Context-Aware Entropy Analysis:** Detected high-entropy secrets even without keys (e.g. `Error: ... 44saCk9...`) by analyzing context keywords.
-- **Custom Regex Rules:** Deterministic redaction for structured data (UUIDs, IDs) that overrides entropy checks, ensuring 100% compliance for known patterns.
-- **100% Accuracy:** Verified against "Wild" stress tests including binary garbage, JSON nesting, and multilingual logs.
+- **Custom Regex Rules:** Deterministic redaction for structured data (UUIDs, IDs) that overrides entropy checks for known patterns.
+- **Regression & Fuzz Coverage:** Tested against stress cases including binary garbage, JSON nesting, and multilingual logs.
 - **Deterministic Hashing:** Replaces secrets with unique hashes (e.g., `[HIDDEN:a1b2c]`), allowing QA to correlate errors without seeing the raw data.
 - **Drop-in:** No code changes required. Works with any language (Node, Python, Java, Go).
 - **Whitelist Support:** Explicitly allow safe patterns (e.g., git hashes, system IDs) using `PII_SAFE_REGEX_LIST` to prevent false positives.
@@ -73,9 +90,9 @@ This deploys the PII-Shield Operator which automatically injects highly-secure, 
 ### Docker
 Get the latest lightweight image from Docker Hub or GHCR:
 ```bash
-docker pull thelisdeep/pii-shield:v2.0.0
+docker pull thelisdeep/pii-shield:v2.0.2
 # OR from GitHub Container Registry (Enterprise):
-docker pull ghcr.io/pii-shield/pii-shield:v2.0.0
+docker pull ghcr.io/pii-shield/pii-shield:v2.0.2
 ```
 
 ### Build from Source
@@ -110,7 +127,7 @@ You can pipe any log output through PII-Shield to see it in action immediately:
 
 ```bash
 # Emulate a log with a sensitive password
-echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/pii-shield/pii-shield:v2.0.0
+echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/pii-shield/pii-shield:v2.0.2
 
 # Output: Error: User password=[HIDDEN:8f3a11] failed login
 ```
@@ -148,11 +165,32 @@ spec:
 The Operator will automatically inject the `pii-shield-agent` using the Native Sidecar pattern (K8s 1.28+) and securely mask all logs!
 
 ## Verification
-This project is verified with a comprehensive testing suite, ensuring production-readiness for v2.0.0:
+This project is verified with a growing testing suite intended to raise confidence before production hardening:
 1. **Unit Tests**: Cover edge cases, multilingual support, and JSON integrity with >85% coverage.
 2. **Fuzzing**: Native Go fuzzing ensures crash safety against invalid and random binary inputs.
-3. **Smoke Testing**: `./run_smoke.sh` validates 100% detection accuracy on mixed workloads.
+3. **Smoke Testing**: `./run_smoke.sh` exercises mixed workloads and reports detection accuracy.
 4. **End-to-End (E2E) Testing**: The `operator/tests/run_e2e.sh` suite performs full-stack validation using Minikube and Helm. It builds local images, provisions the Operator without cert-manager, deploys target Jobs, and verifies actual log redaction by intercepting sidecar outputs.
+
+### Operator Integration Tests
+
+The operator keeps fast unit tests separate from Kubernetes API integration tests. Regular operator tests do not start a local API server:
+
+```bash
+cd operator
+go test ./...
+```
+
+To run the envtest-based controller integration suite:
+
+```bash
+./run_operator_integration.sh
+```
+
+These tests start a local Kubernetes API server and etcd through `envtest`, so they require permission to bind to `127.0.0.1`. In restricted sandboxes, run them in a local shell, Docker environment, or CI runner that allows localhost bind.
+
+## Support
+
+PII-Shield is open-source infrastructure for privacy-preserving logs. If this project is useful to you or your organization, you can support its development through [GitHub Sponsors](https://github.com/sponsors/pii-shield).
 
 ## License
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.

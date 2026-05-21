@@ -1,7 +1,7 @@
 # Binaries
 # Binaries built by go build or scripts
 /pii-shield
-cleaner
+/cleaner
 *.exe
 *.exe~
 *.dll
@@ -35,15 +35,32 @@ Thumbs.db
 .vscode/
 *.iml
 
-# Logs
+# Logs and local scratch files
 *.log
 *.tmp
-cleaner
-docs
-buiild.sh
-public
+
+# Local build/cache artifacts
+.gocache/
+operator/manager
+operator/cover.out
+
+# Published landing page source/assets are maintained outside the core repo
+public/
+
+# Browser WASM demo source is maintained with the landing page, not the core repo
 cmd/wasm/
-pkg/scanner/regex_redaction_test.go
+
+# Draft/published article workspace is maintained outside the core repo
+docs/
+
+# Local OpenSpec workspace is maintained outside the core repo
+openspec/
+
+# Local release helper
 release.sh
-openspec/*
-.agent
+
+# Local automation scratch space
+.agent/
+
+# Local build binary
+build.sh

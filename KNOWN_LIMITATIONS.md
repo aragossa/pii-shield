@@ -1,0 +1,24 @@
+# Known Limitations
+
+PII-Shield is an active MVP/Beta project. The current codebase validates the core redaction approach, but production compliance deployments should account for the boundaries below.
+
+## Kubernetes Logging
+
+- The default file-based sidecar mode expects the application to write logs to the configured file path.
+- Full transparent interception of standard Kubernetes `stdout`/`stderr` logs is not complete yet.
+- Pipe mode changes the target container command and should be tested carefully before production use.
+
+## Operator
+
+- The Kubernetes operator is in stabilization. It supports policy objects and webhook injection, but advanced policy lifecycle management is still evolving.
+- eBPF mode is experimental/R&D and should not be treated as production-ready interception.
+
+## Scanner Configuration
+
+- Set a persistent `PII_SALT` in production if deterministic hashes must remain stable across restarts.
+- Adaptive entropy thresholding is experimental and should be validated against representative log traffic before enabling.
+- Custom regex and safe regex rules should be tested with real log samples to avoid false positives or false negatives.
+
+## Roadmap Boundaries
+
+Proxy-Wasm gateway integration, a visual Control Plane, and production-grade eBPF interception are planned R&D areas rather than completed stable features.
