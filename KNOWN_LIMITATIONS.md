@@ -1,6 +1,6 @@
 # Known Limitations
 
-PII-Shield is an active MVP/Beta project. The current codebase validates the core redaction approach, but production compliance deployments should account for the boundaries below.
+PII-Shield is released and usable, but not yet fully production-hardened across all deployment modes. Production compliance deployments should account for the boundaries below.
 
 ## Kubernetes Logging
 

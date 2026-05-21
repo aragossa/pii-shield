@@ -1,6 +1,6 @@
 # Security Policy
 
-PII-Shield is currently in beta stabilization. Please treat security-sensitive deployments as controlled rollouts and validate policies against representative logs before production use.
+PII-Shield is currently in a production-hardening phase. Please treat security-sensitive deployments as controlled rollouts and validate policies against representative logs before production use.
 
 ## Reporting Security Issues
 

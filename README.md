@@ -30,17 +30,17 @@ PII-Shield offers two distinct ways to integrate into your stack:
 
 ## Project Status & Roadmap
 
-PII-Shield is an active open-source MVP moving through production hardening. The core scanner and CLI sidecar are usable for local streams and controlled deployments, while the Kubernetes operator and SDK surfaces are in beta stabilization.
+PII-Shield is an actively developed open-source security tool in a production-hardening phase. The v2.x release line ships usable CLI, container, Helm/operator, and WASM SDK artifacts. Core redaction paths are ready for controlled deployments, while some Kubernetes deployment modes and supply-chain guarantees are still being stabilized.
 
 | Component | Status |
 | --- | --- |
-| Core scanner | Active MVP / Beta |
-| CLI sidecar | Beta |
+| Core scanner | Released / controlled deployments |
+| CLI sidecar | Released / controlled deployments |
 | Kubernetes operator | Stabilization phase |
-| WASM SDKs | Beta |
+| WASM SDKs | Released beta |
 | Proxy-Wasm gateway integration | Planned R&D |
 | Control Plane UI | Planned R&D |
-| eBPF interception | Planned R&D |
+| eBPF interception | Experimental R&D |
 
 See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the current production-hardening boundaries.
 
@@ -49,7 +49,7 @@ See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the current production-hard
 Developers often forget to mask sensitive data. Traditional regex filters in Fluentd/Logstash are slow, hard to maintain, and consume expensive CPU on log aggregators.
 
 **PII-Shield sits right next to your app container:**
-- **Beta Core Engine:** Optimized for Kubernetes sidecars with low memory allocations on hot paths and deterministic regex matching.
+- **Production-hardening Core Engine:** Optimized for Kubernetes sidecars with low memory allocations on hot paths and deterministic regex matching.
 - **Context-Aware Entropy Analysis:** Detected high-entropy secrets even without keys (e.g. `Error: ... 44saCk9...`) by analyzing context keywords.
 - **Custom Regex Rules:** Deterministic redaction for structured data (UUIDs, IDs) that overrides entropy checks for known patterns.
 - **Regression & Fuzz Coverage:** Tested against stress cases including binary garbage, JSON nesting, and multilingual logs.
