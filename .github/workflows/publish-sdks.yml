@@ -39,7 +39,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           
       - name: Download WASM Artifact
@@ -52,9 +52,7 @@ jobs:
         working-directory: sdks/node
         run: |
           npm install
-          npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          npm publish --access public
           
   publish-pypi:
     needs: build-wasm
