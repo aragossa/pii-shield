@@ -90,9 +90,9 @@ This deploys the PII-Shield Operator which automatically injects highly-secure, 
 ### Docker
 Get the latest lightweight image from Docker Hub or GHCR:
 ```bash
-docker pull thelisdeep/pii-shield:v2.0.3
+docker pull thelisdeep/pii-shield:v2.0.4
 # OR from GitHub Container Registry (Enterprise):
-docker pull ghcr.io/pii-shield/pii-shield:v2.0.3
+docker pull ghcr.io/pii-shield/pii-shield:v2.0.4
 ```
 
 ### Build from Source
@@ -127,7 +127,7 @@ You can pipe any log output through PII-Shield to see it in action immediately:
 
 ```bash
 # Emulate a log with a sensitive password
-echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/pii-shield/pii-shield:v2.0.3
+echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/pii-shield/pii-shield:v2.0.4
 
 # Output: Error: User password=[HIDDEN:8f3a11] failed login
 ```
