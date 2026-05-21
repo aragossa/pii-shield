@@ -11,16 +11,16 @@ pip install pii-shield-wasi
 ## Usage
 
 ```python
-from pii_shield import Scanner
+from pii_shield import PiiShield, PiiShieldConfig
 
 # Initialize the scanner with optional configuration overrides
-scanner = Scanner({
-    "entropy_threshold": 4.0,
-    "confidence_score": 0.8
-})
+shield = PiiShield(PiiShieldConfig(
+    entropy_threshold=4.0,
+    confidence_score=0.8
+))
 
 text = "Connecting to DB with password: MySuperSecretPassword123!"
-redacted_text = scanner.redact(text)
+redacted_text = shield.redact(text)
 
 print(redacted_text)
 # Output might redact the high entropy secret based on context
