@@ -11,16 +11,16 @@ npm install @aragossa/pii-shield-wasi
 ## Usage
 
 ```javascript
-const { Scanner } = require('@aragossa/pii-shield-wasi');
+const { PiiShield } = require('@aragossa/pii-shield-wasi');
 
 // Initialize the scanner with optional configuration overrides
-const scanner = new Scanner({
-    entropy_threshold: 4.0,
-    confidence_score: 0.8
+const shield = await PiiShield.create({
+    entropyThreshold: 4.0,
+    confidenceScore: 0.8
 });
 
 const text = "Connecting to DB with api_key: aB3$xyz890LmnopQ";
-const redactedText = scanner.redact(text);
+const redactedText = shield.redact(text);
 
 console.log(redactedText);
 // Output will have the high entropy token redacted
