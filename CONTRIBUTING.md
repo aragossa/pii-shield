@@ -24,7 +24,17 @@ Before making a PR, please run tests to make sure you didn't break the pipeline:
 go test ./... -v -fuzz=Fuzz
 
 # Run stress and smoke tests
-./run_smoke.sh
+./scripts/test-smoke.sh
+```
+
+For performance-sensitive changes, compare CLI throughput against the baseline branch:
+```bash
+BASE_REF=origin/main RUNS=7 LINES=500000 ./benchmark/run_benchmarks.sh
+```
+
+For scanner-only microbenchmarks, run:
+```bash
+go test -bench=. -benchmem ./pkg/scanner
 ```
 
 ## Operator Run

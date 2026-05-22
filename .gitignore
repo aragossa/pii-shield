@@ -41,6 +41,7 @@ Thumbs.db
 
 # Local build/cache artifacts
 .gocache/
+benchmark/.benchmark-results/
 operator/manager
 operator/cover.out
 
@@ -64,3 +65,6 @@ release.sh
 
 # Local build binary
 build.sh
+
+# Local notes
+notes

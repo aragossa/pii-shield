@@ -1,5 +1,8 @@
 #!/bin/bash
-# run_smoke.sh - v5 (With Performance Metrics & macOS Support)
+# test-smoke.sh - v5 (With Performance Metrics & macOS Support)
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
