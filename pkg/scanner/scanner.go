@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -80,6 +81,9 @@ var (
 	// DefaultEntropyThreshold is the Shannon entropy threshold for high-entropy strings.
 	// Lowered from 3.8 to 3.6 to catch shorter random alphanumeric strings.
 	DefaultEntropyThreshold = 3.6
+
+	DefaultMinSecretLength = 6
+	MaxMinSecretLength     = 1024
 )
 
 var hmacPool *sync.Pool
@@ -119,16 +123,14 @@ func parseFloat(s string) (float64, error) {
 
 // parseInt parses an int from string, returns error if invalid
 func parseInt(s string) (int, error) {
-	var result int
-	_, err := fmt.Sscanf(s, "%d", &result)
-	return result, err
+	return strconv.Atoi(strings.TrimSpace(s))
 }
 
 func loadConfig() Config {
 	cfg := Config{
 		EntropyThreshold:        DefaultEntropyThreshold, // Adjusted for bigrams
 		ConfidenceThreshold:     1.0,                     // High confidence required to skip false positives
-		MinSecretLength:         6,                       // Lower minimal length as we have better context
+		MinSecretLength:         DefaultMinSecretLength,  // Lower minimal length as we have better context
 		DisableBigramCheck:      false,                   // Enable bigram check by default
 		BigramDefaultScore:      -7.0,                    // Default for unknown bigrams
 		AdaptiveThreshold:       false,                   // Disabled by default (User feedback)
@@ -162,6 +164,15 @@ func loadConfig() Config {
 	if envConfThreshold := os.Getenv("PII_CONFIDENCE_THRESHOLD"); envConfThreshold != "" {
 		if confThreshold, err := parseFloat(envConfThreshold); err == nil {
 			cfg.ConfidenceThreshold = confThreshold
+		}
+	}
+
+	// Load minimum secret length override
+	if envMinSecretLength := os.Getenv("PII_MIN_SECRET_LENGTH"); envMinSecretLength != "" {
+		if minSecretLength, err := parseInt(envMinSecretLength); err == nil && minSecretLength > 0 && minSecretLength <= MaxMinSecretLength {
+			cfg.MinSecretLength = minSecretLength
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: PII_MIN_SECRET_LENGTH must be a positive integer <= %d. Using default %d.\n", MaxMinSecretLength, cfg.MinSecretLength)
 		}
 	}
 
