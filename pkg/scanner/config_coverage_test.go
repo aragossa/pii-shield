@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -58,4 +59,52 @@ func TestLoadConfigEdgeCases(t *testing.T) {
 
 	// Ensure UpdateConfig functions well
 	UpdateConfig(cfg)
+}
+
+func TestLoadConfigMinSecretLength(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		t.Setenv("PII_SALT", "test_salt_123456")
+		t.Setenv("PII_MIN_SECRET_LENGTH", "")
+
+		cfg := loadConfig()
+
+		if cfg.MinSecretLength != DefaultMinSecretLength {
+			t.Errorf("expected default min secret length %d, got %d", DefaultMinSecretLength, cfg.MinSecretLength)
+		}
+	})
+
+	t.Run("valid override", func(t *testing.T) {
+		t.Setenv("PII_SALT", "test_salt_123456")
+		t.Setenv("PII_MIN_SECRET_LENGTH", "12")
+
+		cfg := loadConfig()
+
+		if cfg.MinSecretLength != 12 {
+			t.Errorf("expected min secret length 12, got %d", cfg.MinSecretLength)
+		}
+	})
+
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "non integer", value: "abc"},
+		{name: "partial integer", value: "12abc"},
+		{name: "zero", value: "0"},
+		{name: "negative", value: "-1"},
+		{name: "above maximum", value: fmt.Sprintf("%d", MaxMinSecretLength+1)},
+	}
+
+	for _, tt := range tests {
+		t.Run("invalid override "+tt.name, func(t *testing.T) {
+			t.Setenv("PII_SALT", "test_salt_123456")
+			t.Setenv("PII_MIN_SECRET_LENGTH", tt.value)
+
+			cfg := loadConfig()
+
+			if cfg.MinSecretLength != DefaultMinSecretLength {
+				t.Errorf("expected invalid min secret length %q to keep default %d, got %d", tt.value, DefaultMinSecretLength, cfg.MinSecretLength)
+			}
+		})
+	}
 }
