@@ -1,4 +1,6 @@
 FROM golang:1.26 AS builder
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -6,7 +8,7 @@ RUN go mod download
 
 COPY . .
 # Build statically linked binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -o pii-shield ./cmd/cleaner/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o pii-shield ./cmd/cleaner/main.go
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
