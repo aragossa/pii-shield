@@ -168,8 +168,28 @@ The Operator will automatically inject the `pii-shield-agent` using the Native S
 This project is verified with a growing testing suite intended to raise confidence before production hardening:
 1. **Unit Tests**: Cover edge cases, multilingual support, and JSON integrity with >85% coverage.
 2. **Fuzzing**: Native Go fuzzing ensures crash safety against invalid and random binary inputs.
-3. **Smoke Testing**: `./run_smoke.sh` exercises mixed workloads and reports detection accuracy.
+3. **Smoke Testing**: `./scripts/test-smoke.sh` exercises mixed workloads and reports detection accuracy.
 4. **End-to-End (E2E) Testing**: The `operator/tests/run_e2e.sh` suite performs full-stack validation using Minikube and Helm. It builds local images, provisions the Operator without cert-manager, deploys target Jobs, and verifies actual log redaction by intercepting sidecar outputs.
+
+### Performance Benchmarks
+
+To compare end-to-end CLI throughput between the current branch and a baseline ref:
+
+```bash
+./benchmark/run_benchmarks.sh
+```
+
+By default, the benchmark compares `HEAD` against `origin/main`, refreshes `origin/main`, generates a mixed log corpus, alternates old/new run order, and reports median, p95, min/max, and MiB/s:
+
+```bash
+BASE_REF=origin/main RUNS=9 LINES=500000 ./benchmark/run_benchmarks.sh
+```
+
+This measures the full stdin-to-stdout CLI path. For scanner-only microbenchmarks, run:
+
+```bash
+go test -bench=. -benchmem ./pkg/scanner
+```
 
 ### Operator Integration Tests
 
@@ -183,7 +203,7 @@ go test ./...
 To run the envtest-based controller integration suite:
 
 ```bash
-./run_operator_integration.sh
+./scripts/test-operator-integration.sh
 ```
 
 These tests start a local Kubernetes API server and etcd through `envtest`, so they require permission to bind to `127.0.0.1`. In restricted sandboxes, run them in a local shell, Docker environment, or CI runner that allows localhost bind.
