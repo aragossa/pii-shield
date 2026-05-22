@@ -1,6 +1,6 @@
 apiVersion: v2
 name: pii-shield
-description: A Helm chart for deploying PII-Shield as a demonstrational logging sidecar
+description: A Helm chart for deploying PII-Shield as a scratch-compatible logging sidecar
 type: application
 version: 2.0.4
 appVersion: "2.0.4"
