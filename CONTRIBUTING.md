@@ -41,5 +41,6 @@ docker build -t pii-shield:local .
 helm upgrade --install pii-shield ./charts/pii-shield \
   --set image.repository=pii-shield \
   --set image.tag=local \
+  --set demo.enabled=true \
   --namespace pii-shield --create-namespace
 ```
