@@ -16,3 +16,10 @@ The `main` branch is the active development line. Tagged releases should be eval
 - Test custom redaction and whitelist rules before rollout.
 - Review Kubernetes webhook behavior and failure policy for your compliance requirements.
 - Treat eBPF and advanced gateway interception modes as R&D until explicitly marked stable.
+
+## Secret Handling
+
+- Do not commit API keys, tokens, private keys, kubeconfigs, database URLs with credentials, or production salts.
+- Use GitHub Actions secrets for CI/CD credentials and Kubernetes secrets or an external secret manager for runtime deployments.
+- Rotate any credential immediately if it is accidentally committed, even if the commit is later removed.
+- Review logs and test fixtures before publishing them to ensure they do not contain real PII or credentials.
