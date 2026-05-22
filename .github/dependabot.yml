@@ -1,0 +1,48 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gomod
+    directory: /operator
+    schedule:
+      interval: weekly
+    groups:
+      operator-go-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /operator
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /sdks/node
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: /sdks/python
+    schedule:
+      interval: weekly

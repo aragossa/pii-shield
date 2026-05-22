@@ -52,7 +52,7 @@ public/
 cmd/wasm/
 
 # Draft/published article workspace is maintained outside the core repo
-docs/
+docs/*
 
 # Local OpenSpec workspace is maintained outside the core repo
 openspec/
@@ -68,3 +68,7 @@ build.sh
 
 # Local notes
 notes
+
+# Grant readiness documentation
+!docs/threat-model.md
+!docs/application-readiness.md
