@@ -10,13 +10,15 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  id-token: write
 
 jobs:
   scorecard:
     name: Analyze
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
