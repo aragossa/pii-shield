@@ -8,6 +8,9 @@ on:
       - 'charts/**'
       - '.github/workflows/release-chart.yml'
 
+permissions:
+  contents: read
+
 jobs:
   release:
     # Depending on default permission settings for your org (contents being read-only or read-write for workloads), you will have to add permissions
