@@ -37,6 +37,11 @@ For scanner-only microbenchmarks, run:
 go test -bench=. -benchmem ./pkg/scanner
 ```
 
+## Review Policy
+Pull requests should pass the required GitHub Actions checks before merge. Ownership for major areas of the repository is documented in `.github/CODEOWNERS`; use it to identify the right reviewer for scanner, operator, chart, SDK, workflow, and security-documentation changes.
+
+For solo-maintainer periods, CODEOWNERS documents responsibility but should not be enforced as a required branch rule unless another reviewer is available.
+
 ## Operator Run
 To debug the webhook in a local Minikube cluster:
 ```bash
