@@ -213,5 +213,9 @@ These tests start a local Kubernetes API server and etcd through `envtest`, so t
 
 PII-Shield is open-source infrastructure for privacy-preserving logs. If this project is useful to you or your organization, you can support its development through [GitHub Sponsors](https://github.com/sponsors/pii-shield).
 
+## Release Verification
+
+Release checksum and image-digest verification guidance is documented in [docs/release-verification.md](docs/release-verification.md). Signature and provenance-backed releases are tracked as part of the supply-chain hardening roadmap.
+
 ## License
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.

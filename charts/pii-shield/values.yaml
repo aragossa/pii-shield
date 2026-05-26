@@ -53,6 +53,9 @@ resources:
 piiConfig:
   # PII_SALT: Random byte string used for HMAC hashing. Recommended to set for persistent hashes.
   salt: ""
+
+  # PII_REQUIRE_STRONG_SALT: Reject explicitly configured salts shorter than 16 bytes
+  requireStrongSalt: "false"
   
   # Configuration tuning
   # PII_ENTROPY_THRESHOLD: Shannon entropy threshold (3.0 - 8.0)

@@ -87,6 +87,7 @@ Important settings are documented in `CONFIGURATION.md`.
 Production-sensitive settings:
 
 - `PII_SALT`: set a persistent value longer than 16 characters when deterministic hashes must remain stable across restarts.
+- `PII_REQUIRE_STRONG_SALT`: set to `true` in production or compliance environments to reject explicitly configured salts shorter than 16 bytes.
 - `PII_ENTROPY_THRESHOLD`: tune carefully to balance false positives and false negatives.
 - `PII_SENSITIVE_KEYS`: keep organization-specific key names covered.
 - `PII_CUSTOM_REGEX_LIST`: use for deterministic redaction of structured IDs and domain-specific secrets.
@@ -119,6 +120,8 @@ Security documentation and controls:
 - `SECURITY.md` defines private vulnerability reporting, supported versions, deployment guidance, and secret handling.
 - `docs/threat-model.md` documents assets, actors, data flows, trust boundaries, STRIDE threats, mitigations, and residual risks.
 - `.github/workflows/scorecard.yml` runs OpenSSF Scorecard and uploads SARIF results.
+- `.github/workflows/codeql.yml` runs CodeQL for Go code.
+- `.github/workflows/security-scan.yml` runs Go vulnerability checks, filesystem vulnerability scanning, and SBOM generation.
 - `.github/dependabot.yml` tracks dependency updates across Go modules, GitHub Actions, Docker, Node SDK, and Python SDK ecosystems.
 
 Required operator actions before production:
@@ -160,6 +163,8 @@ Release workflows publish:
 - Container images to GHCR and Docker Hub.
 - Node and Python WASM SDK packages.
 - Helm chart releases.
+
+Release notes expectations are documented in `docs/release-notes-policy.md`. Release artifact verification is documented in `docs/release-verification.md`. Current releases include checksums, and release workflows are being hardened with GitHub artifact attestations plus container SBOM/provenance attestations.
 
 Maintenance expectations:
 

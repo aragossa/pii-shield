@@ -72,3 +72,5 @@ notes
 # Grant readiness documentation
 !docs/threat-model.md
 !docs/application-readiness.md
+!docs/release-verification.md
+!docs/release-notes-policy.md

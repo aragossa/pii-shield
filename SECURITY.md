@@ -13,6 +13,7 @@ The `main` branch is the active development line. Tagged releases should be eval
 ## Deployment Guidance
 
 - Configure a persistent `PII_SALT` for production deployments.
+- Set `PII_REQUIRE_STRONG_SALT=true` in production or compliance environments if weak explicit salts should fail startup instead of only logging a warning.
 - Test custom redaction and whitelist rules before rollout.
 - Review Kubernetes webhook behavior and failure policy for your compliance requirements.
 - Treat eBPF and advanced gateway interception modes as R&D until explicitly marked stable.

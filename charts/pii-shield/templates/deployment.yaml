@@ -76,6 +76,8 @@ spec:
             - name: PII_SALT
               value: {{ .Values.piiConfig.salt | quote }}
             {{- end }}
+            - name: PII_REQUIRE_STRONG_SALT
+              value: {{ .Values.piiConfig.requireStrongSalt | quote }}
             - name: PII_ENTROPY_THRESHOLD
               value: {{ .Values.piiConfig.entropyThreshold | quote }}
             - name: PII_MIN_SECRET_LENGTH
