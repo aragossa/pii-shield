@@ -126,6 +126,15 @@ func parseInt(s string) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(s))
 }
 
+func envTruthy(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func loadConfig() Config {
 	cfg := Config{
 		EntropyThreshold:        DefaultEntropyThreshold, // Adjusted for bigrams
@@ -140,6 +149,9 @@ func loadConfig() Config {
 	// Load Salt - CRITICAL SECURITY: Try secure, fallback to error log (don't panic library)
 	if envSalt := os.Getenv("PII_SALT"); envSalt != "" {
 		if len(envSalt) < 16 {
+			if envTruthy(os.Getenv("PII_REQUIRE_STRONG_SALT")) {
+				panic("FATAL: PII_SALT is too short (<16 bytes) and PII_REQUIRE_STRONG_SALT is enabled")
+			}
 			fmt.Fprintf(os.Stderr, "WARNING: PII_SALT is too short (<16 bytes). Weak security.\n")
 		}
 		cfg.Salt = []byte(envSalt)

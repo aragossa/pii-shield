@@ -7,9 +7,12 @@ PII-Shield is configured entirely via environment variables.
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `PII_SALT` | Random byte string used for HMAC hashing. **MUST be >16 chars in production.** | **No (Recommended)** | Randomly generated on startup (but ephemeral) |
+| `PII_REQUIRE_STRONG_SALT` | Reject startup when `PII_SALT` is explicitly set to fewer than 16 bytes. Recommended for production and compliance deployments. | No | `false` |
 
 > [!WARNING]
 > If `PII_SALT` is not set, PII-Shield generates a random salt on startup. This means hashes will change every time the pod restarts, making it impossible to correlate logs across restarts. For production, **ALWAYS** set a persistent `PII_SALT`.
+
+Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail instead of only warning when a weak explicit salt is configured.
 
 ## Detection Tuning
 
