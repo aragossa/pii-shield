@@ -4,7 +4,7 @@ PII-Shield is currently in a production-hardening phase. Please treat security-s
 
 ## Reporting Security Issues
 
-Please report security issues privately to the maintainer at ilya.ploskovitov@pii-shield.com. Include the affected component, reproduction steps, expected behavior, and any relevant logs or policy snippets.
+Please do not open a public GitHub issue for suspected vulnerabilities. Report security issues privately by email to the maintainer at ilya.ploskovitov@pii-shield.com. Include the affected component, reproduction steps, expected behavior, and any relevant logs or policy snippets.
 
 ## Supported Versions
 
@@ -13,6 +13,7 @@ The `main` branch is the active development line. Tagged releases should be eval
 ## Deployment Guidance
 
 - Configure a persistent `PII_SALT` for production deployments.
+- Set `PII_REQUIRE_STRONG_SALT=true` in production or compliance environments if weak explicit salts should fail startup instead of only logging a warning.
 - Test custom redaction and whitelist rules before rollout.
 - Review Kubernetes webhook behavior and failure policy for your compliance requirements.
 - Treat eBPF and advanced gateway interception modes as R&D until explicitly marked stable.

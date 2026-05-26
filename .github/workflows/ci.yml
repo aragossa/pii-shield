@@ -35,6 +35,9 @@ jobs:
     - name: Verify Dependencies
       run: go mod verify
 
+    - name: Run actionlint
+      uses: reviewdog/action-actionlint@v1
+
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v9
       with:

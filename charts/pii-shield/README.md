@@ -47,6 +47,7 @@ You can tune the redaction engine via `values.yaml` under `piiConfig`:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `salt` | string | `""` | Persistent HMAC salt. If empty, randomly generated on boot. |
+| `requireStrongSalt` | string | `"false"` | Reject explicitly configured salts shorter than 16 bytes. |
 | `entropyThreshold` | string | `"3.6"` | Shannon entropy cut-off determining what is considered a "secret". |
 | `minSecretLength` | string | `"6"` | Minimum string length to apply entropy checks. |
 | `sensitiveKeys` | string | `"password,secret,token,key,api_key"` | Key names mapped to `key=value` parsers to aggressively redact. |

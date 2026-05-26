@@ -10,6 +10,7 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 ![Build Status](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg)
 ![Coverage Status](https://codecov.io/gh/pii-shield/pii-shield/branch/main/graph/badge.svg)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/pii-shield/pii-shield?sort=semver)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12945/badge)](https://www.bestpractices.dev/projects/12945)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)
 ![PyPI Downloads](https://img.shields.io/pypi/dm/pii-shield-wasi?label=PyPI%20Downloads&color=blue)
 ![npm Downloads](https://img.shields.io/npm/dw/@aragossa/pii-shield-wasi?label=npm%20Downloads&color=green)
@@ -211,6 +212,10 @@ These tests start a local Kubernetes API server and etcd through `envtest`, so t
 ## Support
 
 PII-Shield is open-source infrastructure for privacy-preserving logs. If this project is useful to you or your organization, you can support its development through [GitHub Sponsors](https://github.com/sponsors/pii-shield).
+
+## Release Verification
+
+Release checksum and image-digest verification guidance is documented in [docs/release-verification.md](docs/release-verification.md). Signature and provenance-backed releases are tracked as part of the supply-chain hardening roadmap.
 
 ## License
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.

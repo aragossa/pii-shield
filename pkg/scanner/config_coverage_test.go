@@ -108,3 +108,40 @@ func TestLoadConfigMinSecretLength(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfigRequireStrongSalt(t *testing.T) {
+	t.Run("allows weak salt by default for backward compatibility", func(t *testing.T) {
+		t.Setenv("PII_SALT", "short123")
+		t.Setenv("PII_REQUIRE_STRONG_SALT", "")
+
+		cfg := loadConfig()
+
+		if string(cfg.Salt) != "short123" {
+			t.Errorf("expected weak salt to be accepted by default, got %q", string(cfg.Salt))
+		}
+	})
+
+	t.Run("rejects weak salt when required", func(t *testing.T) {
+		t.Setenv("PII_SALT", "short123")
+		t.Setenv("PII_REQUIRE_STRONG_SALT", "true")
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected weak salt to panic when PII_REQUIRE_STRONG_SALT is enabled")
+			}
+		}()
+
+		_ = loadConfig()
+	})
+
+	t.Run("accepts strong salt when required", func(t *testing.T) {
+		t.Setenv("PII_SALT", "strong_salt_123456789")
+		t.Setenv("PII_REQUIRE_STRONG_SALT", "true")
+
+		cfg := loadConfig()
+
+		if string(cfg.Salt) != "strong_salt_123456789" {
+			t.Errorf("expected strong salt to be accepted, got %q", string(cfg.Salt))
+		}
+	})
+}
