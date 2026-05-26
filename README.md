@@ -10,6 +10,7 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 ![Build Status](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg)
 ![Coverage Status](https://codecov.io/gh/pii-shield/pii-shield/branch/main/graph/badge.svg)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/pii-shield/pii-shield?sort=semver)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12945/badge)](https://www.bestpractices.dev/projects/12945)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)
 ![PyPI Downloads](https://img.shields.io/pypi/dm/pii-shield-wasi?label=PyPI%20Downloads&color=blue)
 ![npm Downloads](https://img.shields.io/npm/dw/@aragossa/pii-shield-wasi?label=npm%20Downloads&color=green)
