@@ -2,6 +2,24 @@
 
 Welcome! Please read this short guide before you start.
 
+## Contribution Process
+
+1. Open an issue for bugs, feature requests, or larger design changes.
+2. Fork the repository and create a branch for your change.
+3. Make the change and add or update tests when behavior changes.
+4. Run the relevant local tests described below.
+5. Open a pull request against `main`.
+6. Wait for required GitHub Actions checks to pass and address review feedback before merge.
+
+## Contribution Requirements
+
+Acceptable contributions should:
+- Follow standard Go formatting with `gofmt`.
+- Keep existing tests passing and add or update tests when behavior changes.
+- Update documentation when user-facing behavior, configuration, deployment, or security guidance changes.
+- Avoid committing secrets, credentials, generated binaries, or unrelated formatting-only churn.
+- Keep pull requests focused on one logical change whenever practical.
+
 ## Prerequisites
 You will need the following tools:
 - **Go** (version 1.22+)
