@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
 
@@ -30,10 +30,10 @@ jobs:
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Install Helm
-        uses: azure/setup-helm@v5
+        uses: azure/setup-helm@f0accbfd55e3332a28f721b8202b1016cecf90d5
 
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.7.0
+        uses: helm/chart-releaser-action@a0d2dc62c5e491af8ef6ba64a2e02bcf3fb33aa1
         with:
           skip_existing: true
         env:

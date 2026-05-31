@@ -26,10 +26,10 @@ jobs:
             workdir: operator
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
+        uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee
         with:
           repo-checkout: false
           go-version-file: ${{ matrix.module.workdir }}/go.mod
@@ -41,10 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
         with:
           scan-type: fs
           scan-ref: .
@@ -58,17 +58,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Generate repository SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           path: .
           format: spdx-json
           output-file: pii-shield-sbom.spdx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: pii-shield-sbom
           path: pii-shield-sbom.spdx.json
