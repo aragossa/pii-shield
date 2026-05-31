@@ -3,18 +3,8 @@
 **Zero-code log sanitization sidecar for Kubernetes.**
 Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave the pod.
 
-![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
-![Docker Pulls](https://img.shields.io/docker/pulls/thelisdeep/pii-shield)
-![Go Report Card](https://goreportcard.com/badge/github.com/pii-shield/pii-shield?v=1)
-![Go Reference](https://pkg.go.dev/badge/github.com/pii-shield/pii-shield.svg)
-![Build Status](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg)
-![Coverage Status](https://codecov.io/gh/pii-shield/pii-shield/branch/main/graph/badge.svg)
-![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/pii-shield/pii-shield?sort=semver)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12945/badge)](https://www.bestpractices.dev/projects/12945)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)
-![PyPI Downloads](https://img.shields.io/pypi/dm/pii-shield-wasi?label=PyPI%20Downloads&color=blue)
-![npm Downloads](https://img.shields.io/npm/dw/@aragossa/pii-shield-wasi?label=npm%20Downloads&color=green)
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/pii-shield)
+[![Release](https://img.shields.io/badge/release-v2.0.5-blue)](https://github.com/pii-shield/pii-shield/releases/tag/v2.0.5) ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg) ![Docker Pulls](https://img.shields.io/docker/pulls/thelisdeep/pii-shield) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)<br>
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12945/badge)](https://www.bestpractices.dev/projects/12945) ![Go Report Card](https://goreportcard.com/badge/github.com/pii-shield/pii-shield?v=1) ![Test Coverage](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg) [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/pii-shield)
 
 "Don't let PII poison your AI models." PII-Shield ensures that sensitive data never reaches your training dataset, saving you from GDPR-forced model retraining.
 
