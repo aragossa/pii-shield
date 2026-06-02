@@ -80,3 +80,4 @@ notes/*
 !docs/stdout-stderr-interception-design.md
 !docs/operational-runbooks.md
 !docs/sidecar-failure-modes.md
+!docs/operator-stabilization.md

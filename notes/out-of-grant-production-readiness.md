@@ -31,15 +31,17 @@ Goal: make the Kubernetes operator boring and predictable enough for enterprise 
 
 Tasks:
 
-- Define HA expectations for the operator controller.
-- Validate reconciliation behavior during pod restarts and leader changes.
-- Add upgrade safety tests for CRDs.
-- Add rollback safety tests for CRDs and webhook configuration.
-- Define and test admission webhook failure policy behavior.
-- Validate cert lifecycle and renewal behavior.
-- Add namespace-by-namespace rollout support or documented rollout procedure.
-- Add canary rollout guidance for operator upgrades.
-- Document operational risks and recovery steps.
+- [x] Define HA expectations for the operator controller.
+- [ ] Validate reconciliation behavior during pod restarts and leader changes.
+- [ ] Add upgrade safety tests for CRDs.
+- [ ] Add rollback safety tests for CRDs and webhook configuration.
+- [x] Define and test admission webhook failure policy behavior.
+- [ ] Validate cert lifecycle and renewal behavior.
+- [x] Add namespace-by-namespace rollout support or documented rollout procedure.
+- [x] Add canary rollout guidance for operator upgrades.
+- [x] Document operational risks and recovery steps.
+
+Partially completed in `docs/operator-stabilization.md` and the `pii-shield-operator` Helm chart. The chart now exposes `webhook.failurePolicy` and an optional PodDisruptionBudget. Reconciliation, CRD upgrade/rollback, and certificate lifecycle validation still need cluster-level tests.
 
 Out of grant scope because the grant plans include operator integration testing and Control Plane UI work, but do not include a full enterprise operator stabilization track.
 
