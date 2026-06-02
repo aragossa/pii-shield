@@ -32,6 +32,14 @@ Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail ins
 | `PII_DISABLE_BIGRAM_CHECK` | Disable English bigram validation. Set to `true` for non-English logs. | `false` |
 | `PII_BIGRAM_DEFAULT_SCORE` | Log-probability score for unknown bigrams. | `-7.0` |
 
+## Runtime Failure Policy
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PII_FAIL_POLICY` | Controls behavior when line processing fails. Use `open` to keep log flow alive where possible, or `closed` to emit drop markers instead of raw lines. | `open` |
+
+See `docs/sidecar-failure-modes.md` for production failure-mode guidance.
+
 ## Value-Based Regex Redaction (Deterministic)
 
 | Variable | Description |

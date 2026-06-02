@@ -86,6 +86,8 @@ spec:
               value: {{ .Values.piiConfig.sensitiveKeys | quote }}
             - name: PII_ADAPTIVE_THRESHOLD
               value: {{ .Values.piiConfig.adaptiveThreshold | quote }}
+            - name: PII_FAIL_POLICY
+              value: {{ .Values.piiConfig.failPolicy | quote }}
             {{- if .Values.piiConfig.customRegexList }}
             - name: PII_CUSTOM_REGEX_LIST
               value: {{ .Values.piiConfig.customRegexList | quote }}

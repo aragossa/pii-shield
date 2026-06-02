@@ -79,3 +79,4 @@ notes/*
 !docs/kubernetes-compatibility.md
 !docs/stdout-stderr-interception-design.md
 !docs/operational-runbooks.md
+!docs/sidecar-failure-modes.md

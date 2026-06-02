@@ -52,6 +52,7 @@ You can tune the redaction engine via `values.yaml` under `piiConfig`:
 | `minSecretLength` | string | `"6"` | Minimum string length to apply entropy checks. |
 | `sensitiveKeys` | string | `"password,secret,token,key,api_key"` | Key names mapped to `key=value` parsers to aggressively redact. |
 | `adaptiveThreshold` | string | `"false"` | Auto-tuning baselines based on standard traffic. |
+| `failPolicy` | string | `"open"` | Runtime failure policy. Use `"open"` to keep log flow alive, or `"closed"` to emit drop markers on processing failure. |
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
