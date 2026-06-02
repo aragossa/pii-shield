@@ -6,7 +6,7 @@ PII-Shield is an actively developed open-source security tool in a production-ha
 
 Production compliance use should account for the limits documented in `KNOWN_LIMITATIONS.md`, especially around Kubernetes logging modes, operator stabilization, and experimental eBPF work.
 
-For deployment-mode adoption gates, see `docs/production-adoption-checklist.md`. For cluster validation, see `docs/kubernetes-compatibility.md`. For transparent `stdout`/`stderr` planning, see `docs/stdout-stderr-interception-design.md`.
+For deployment-mode adoption gates, see `docs/production-adoption-checklist.md`. For production incident handling, see `docs/operational-runbooks.md`. For cluster validation, see `docs/kubernetes-compatibility.md`. For transparent `stdout`/`stderr` planning, see `docs/stdout-stderr-interception-design.md`.
 
 ## Supported Use Cases
 
@@ -142,8 +142,9 @@ Logging:
 
 Monitoring:
 
-- Helm charts include Prometheus-related resources for operator metrics.
+- Helm charts include Prometheus-related resources for PII-Shield sidecar metrics.
 - Production users should connect these metrics to their cluster monitoring stack and define alerts around webhook health, pod injection failures, and sidecar failures.
+- The `pii-shield` Helm chart can render default Prometheus alert rules with `metrics.prometheusRule.enabled=true`.
 
 Upgrade process:
 

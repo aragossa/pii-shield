@@ -1,0 +1,62 @@
+{{- if .Values.metrics.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "pii-shield-operator.fullname" . }}
+  {{- if .Values.metrics.prometheusRule.namespace }}
+  namespace: {{ .Values.metrics.prometheusRule.namespace }}
+  {{- end }}
+  labels:
+    {{- include "pii-shield-operator.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: pii-shield-operator.rules
+      rules:
+        - alert: PIIShieldOperatorDown
+          expr: kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="{{ include "pii-shield-operator.fullname" . }}"} < 1
+          for: {{ .Values.metrics.prometheusRule.operatorDownFor | quote }}
+          labels:
+            severity: critical
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield operator has no available replicas
+            description: The PII-Shield operator deployment has no available replicas. Admission webhook behavior and sidecar injection may be affected.
+        - alert: PIIShieldWebhookServiceNoEndpoints
+          expr: kube_endpoint_address_available{namespace="{{ .Release.Namespace }}", endpoint="{{ include "pii-shield-operator.fullname" . }}-webhook-service"} < 1
+          for: {{ .Values.metrics.prometheusRule.webhookEndpointFor | quote }}
+          labels:
+            severity: critical
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield webhook service has no endpoints
+            description: The admission webhook service has no available endpoint. New pods may fail admission or miss sidecar injection depending on webhook policy.
+        - alert: PIIShieldWebhookCertificateExpiresSoon
+          expr: certmanager_certificate_expiration_timestamp_seconds{namespace="{{ .Release.Namespace }}", name=~".*webhook.*"} - time() < {{ .Values.metrics.prometheusRule.certExpiresSoonSeconds }}
+          for: {{ .Values.metrics.prometheusRule.certExpiresSoonFor | quote }}
+          labels:
+            severity: warning
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield webhook certificate expires soon
+            description: The webhook certificate is close to expiry. Confirm cert-manager renewal or rotate the certificate before admission traffic is affected.
+        - alert: PIIShieldInjectionAdmissionFailures
+          expr: increase(kube_event_count{namespace="{{ .Release.Namespace }}", reason=~"FailedCreate|FailedAdmission|FailedMount", message=~".*pii-shield.*"}[15m]) > 0
+          for: {{ .Values.metrics.prometheusRule.injectionEventFor | quote }}
+          labels:
+            severity: warning
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield injection or admission failures detected
+            description: Kubernetes events mention PII-Shield admission, injection, or mount failures. Check affected workloads, PiiPolicy references, and operator logs.
+{{- end }}

@@ -65,3 +65,16 @@ sidecar:
   fsGroup: 65532
   # If true, injects the sidecar into 'containers' instead of 'initContainers'
   legacySidecarMode: false
+
+# Observability Configuration
+metrics:
+  prometheusRule:
+    enabled: false
+    # namespace: monitoring
+    labels: {}
+    alertLabels: {}
+    operatorDownFor: 5m
+    webhookEndpointFor: 5m
+    certExpiresSoonSeconds: 604800
+    certExpiresSoonFor: 30m
+    injectionEventFor: 5m
