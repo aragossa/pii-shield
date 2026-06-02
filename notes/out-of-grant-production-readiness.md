@@ -1,0 +1,119 @@
+# Out-of-Grant Production Readiness Tasks
+
+This file tracks production-readiness work that is not covered by the current NLnet, OpenSSF, or selective PII model grant plans.
+
+Execution rule: implement each task as a separate commit. If a task is too large, split it into smaller commits that can be reviewed independently.
+
+## 1. Production-Grade Transparent Kubernetes stdout/stderr Interception
+
+Goal: support ordinary Kubernetes application logs without requiring applications to write to a special file path.
+
+Tasks:
+
+- Design the interception model for normal Kubernetes `stdout` and `stderr` logs.
+- Define which runtime/logging paths are supported first.
+- Implement a production path that works without rewriting application code.
+- Validate behavior with common container runtime logging formats.
+- Add tests for ordinary pod logs.
+- Add tests for log rotation.
+- Add tests for pod restart behavior.
+- Add tests for sidecar crash behavior.
+- Add tests for log loss and duplicate delivery risks.
+- Document limitations, supported environments, and rollback guidance.
+
+Out of grant scope because NLnet covers Proxy-Wasm, eBPF R&D, and Control Plane work, while the OpenSSF grant covers hardening, documentation, testing, and supply-chain readiness. Neither plan promises full transparent Kubernetes `stdout`/`stderr` interception.
+
+## 2. Operator Enterprise Stabilization
+
+Goal: make the Kubernetes operator boring and predictable enough for enterprise production use.
+
+Tasks:
+
+- Define HA expectations for the operator controller.
+- Validate reconciliation behavior during pod restarts and leader changes.
+- Add upgrade safety tests for CRDs.
+- Add rollback safety tests for CRDs and webhook configuration.
+- Define and test admission webhook failure policy behavior.
+- Validate cert lifecycle and renewal behavior.
+- Add namespace-by-namespace rollout support or documented rollout procedure.
+- Add canary rollout guidance for operator upgrades.
+- Document operational risks and recovery steps.
+
+Out of grant scope because the grant plans include operator integration testing and Control Plane UI work, but do not include a full enterprise operator stabilization track.
+
+## 3. Production Failure-Mode Engineering For Sidecar Mode
+
+Goal: define and test what happens when the sidecar path fails under real production pressure.
+
+Tasks:
+
+- Define expected behavior when the sidecar process crashes.
+- Define backpressure behavior when the sanitizer is slower than log production.
+- Define behavior for very large log lines.
+- Define behavior for truncated lines.
+- Define behavior during file rotation.
+- Define behavior under disk pressure.
+- Add fail-open and fail-closed policy options, or document the chosen fixed behavior.
+- Add tests for each failure mode.
+- Add operator and Helm configuration notes where runtime behavior is configurable.
+- Document production recommendations for each failure mode.
+
+Out of grant scope because the grant plans cover testing and documentation broadly, but do not explicitly cover runtime reliability engineering for sidecar failure modes.
+
+## 4. Kubernetes Compatibility Matrix
+
+Goal: make supported Kubernetes environments explicit and testable.
+
+Tasks:
+
+- Define the supported Kubernetes version range.
+- Test against Kind.
+- Test against Minikube.
+- Test against K3s.
+- Test against at least one managed Kubernetes service such as EKS, GKE, or AKS.
+- Record container runtime assumptions.
+- Record known incompatibilities.
+- Add a compatibility table to documentation.
+- Add a repeatable compatibility test checklist.
+
+Out of grant scope because the grant plans include operator tests, but not full multi-cluster compatibility certification.
+
+## 5. Operational Runbooks And Alert Rules
+
+Goal: make production operation repeatable when something goes wrong.
+
+Tasks:
+
+- Write a runbook for admission webhook failures.
+- Write a runbook for sidecar injection failures.
+- Write a runbook for high false-positive incidents.
+- Write a runbook for high false-negative incidents.
+- Write a runbook for dependency/security alert response during production incidents.
+- Add Prometheus alert rules for webhook health.
+- Add Prometheus alert rules for injection failures.
+- Add Prometheus alert rules for sidecar crash or restart signals.
+- Add Prometheus alert rules for sanitizer error rates.
+- Document alert severity and suggested response time.
+
+Out of grant scope because NLnet covers Grafana and ELK visualization, but not incident runbooks or alert policy.
+
+## 6. Production Adoption Checklist Per Deployment Mode
+
+Goal: give users a clear adoption gate for each supported deployment mode.
+
+Tasks:
+
+- [x] Create a checklist for CLI/container use.
+- [x] Create a checklist for sidecar file mode.
+- [x] Create a checklist for Kubernetes operator mode.
+- [x] Create a checklist for WASM SDK use.
+- [x] Mark each deployment mode as ready, controlled rollout, beta, or experimental.
+- [x] Define required configuration for each mode.
+- [x] Define required validation before production rollout.
+- [x] Define rollback steps for each mode.
+- [x] Define monitoring requirements for each mode.
+- [x] Document compliance-review questions for security teams.
+
+Completed in `docs/production-adoption-checklist.md`.
+
+Out of grant scope because the OpenSSF grant covers readiness documentation broadly, but does not include complete per-mode production adoption gates.
