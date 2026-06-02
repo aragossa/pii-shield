@@ -66,15 +66,17 @@ Goal: make supported Kubernetes environments explicit and testable.
 
 Tasks:
 
-- Define the supported Kubernetes version range.
-- Test against Kind.
-- Test against Minikube.
-- Test against K3s.
-- Test against at least one managed Kubernetes service such as EKS, GKE, or AKS.
-- Record container runtime assumptions.
-- Record known incompatibilities.
-- Add a compatibility table to documentation.
-- Add a repeatable compatibility test checklist.
+- [x] Define the supported Kubernetes version range.
+- [ ] Test against Kind.
+- [ ] Test against Minikube.
+- [ ] Test against K3s.
+- [ ] Test against at least one managed Kubernetes service such as EKS, GKE, or AKS.
+- [x] Record container runtime assumptions.
+- [x] Record known incompatibilities.
+- [x] Add a compatibility table to documentation.
+- [x] Add a repeatable compatibility test checklist.
+
+Partially completed as a compatibility matrix and repeatable validation checklist in `docs/kubernetes-compatibility.md`. The environment rows are documented as validation targets; individual cluster evidence should be filled in when each environment is actually tested.
 
 Out of grant scope because the grant plans include operator tests, but not full multi-cluster compatibility certification.
 
