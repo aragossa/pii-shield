@@ -77,3 +77,4 @@ notes/*
 !docs/release-notes-policy.md
 !docs/production-adoption-checklist.md
 !docs/kubernetes-compatibility.md
+!docs/stdout-stderr-interception-design.md

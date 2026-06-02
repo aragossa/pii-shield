@@ -10,16 +10,18 @@ Goal: support ordinary Kubernetes application logs without requiring application
 
 Tasks:
 
-- Design the interception model for normal Kubernetes `stdout` and `stderr` logs.
-- Define which runtime/logging paths are supported first.
-- Implement a production path that works without rewriting application code.
-- Validate behavior with common container runtime logging formats.
-- Add tests for ordinary pod logs.
-- Add tests for log rotation.
-- Add tests for pod restart behavior.
-- Add tests for sidecar crash behavior.
-- Add tests for log loss and duplicate delivery risks.
-- Document limitations, supported environments, and rollback guidance.
+- [x] Design the interception model for normal Kubernetes `stdout` and `stderr` logs.
+- [x] Define which runtime/logging paths are supported first.
+- [ ] Implement a production path that works without rewriting application code.
+- [ ] Validate behavior with common container runtime logging formats.
+- [ ] Add tests for ordinary pod logs.
+- [ ] Add tests for log rotation.
+- [ ] Add tests for pod restart behavior.
+- [ ] Add tests for sidecar crash behavior.
+- [ ] Add tests for log loss and duplicate delivery risks.
+- [x] Document limitations, supported environments, and rollback guidance.
+
+Partially completed in `docs/stdout-stderr-interception-design.md`. The recommended first candidate is command wrapper mode for selected workloads. Production implementation and Kubernetes/runtime validation remain open.
 
 Out of grant scope because NLnet covers Proxy-Wasm, eBPF R&D, and Control Plane work, while the OpenSSF grant covers hardening, documentation, testing, and supply-chain readiness. Neither plan promises full transparent Kubernetes `stdout`/`stderr` interception.
 
