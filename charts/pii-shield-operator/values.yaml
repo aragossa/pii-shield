@@ -55,6 +55,12 @@ webhook:
   # If true, uses cert-manager to generate and manage certificates.
   # If false, Helm will generate self-signed certificates during installation.
   useCertManager: true
+  # Admission failure behavior. Use Ignore for availability-first rollout, Fail for compliance-sensitive enforcement.
+  failurePolicy: Ignore
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
 
 # Advanced Configuration for the PII-Shield Agent injected into Pods
 sidecar:

@@ -31,15 +31,17 @@ Goal: make the Kubernetes operator boring and predictable enough for enterprise 
 
 Tasks:
 
-- Define HA expectations for the operator controller.
-- Validate reconciliation behavior during pod restarts and leader changes.
-- Add upgrade safety tests for CRDs.
-- Add rollback safety tests for CRDs and webhook configuration.
-- Define and test admission webhook failure policy behavior.
-- Validate cert lifecycle and renewal behavior.
-- Add namespace-by-namespace rollout support or documented rollout procedure.
-- Add canary rollout guidance for operator upgrades.
-- Document operational risks and recovery steps.
+- [x] Define HA expectations for the operator controller.
+- [ ] Validate reconciliation behavior during pod restarts and leader changes.
+- [ ] Add upgrade safety tests for CRDs.
+- [ ] Add rollback safety tests for CRDs and webhook configuration.
+- [x] Define and test admission webhook failure policy behavior.
+- [ ] Validate cert lifecycle and renewal behavior.
+- [x] Add namespace-by-namespace rollout support or documented rollout procedure.
+- [x] Add canary rollout guidance for operator upgrades.
+- [x] Document operational risks and recovery steps.
+
+Partially completed in `docs/operator-stabilization.md` and the `pii-shield-operator` Helm chart. The chart now exposes `webhook.failurePolicy` and an optional PodDisruptionBudget. Reconciliation, CRD upgrade/rollback, and certificate lifecycle validation still need cluster-level tests.
 
 Out of grant scope because the grant plans include operator integration testing and Control Plane UI work, but do not include a full enterprise operator stabilization track.
 
@@ -49,16 +51,18 @@ Goal: define and test what happens when the sidecar path fails under real produc
 
 Tasks:
 
-- Define expected behavior when the sidecar process crashes.
-- Define backpressure behavior when the sanitizer is slower than log production.
-- Define behavior for very large log lines.
-- Define behavior for truncated lines.
-- Define behavior during file rotation.
-- Define behavior under disk pressure.
-- Add fail-open and fail-closed policy options, or document the chosen fixed behavior.
-- Add tests for each failure mode.
-- Add operator and Helm configuration notes where runtime behavior is configurable.
-- Document production recommendations for each failure mode.
+- [x] Define expected behavior when the sidecar process crashes.
+- [x] Define backpressure behavior when the sanitizer is slower than log production.
+- [x] Define behavior for very large log lines.
+- [x] Define behavior for truncated lines.
+- [x] Define behavior during file rotation.
+- [x] Define behavior under disk pressure.
+- [x] Add fail-open and fail-closed policy options, or document the chosen fixed behavior.
+- [ ] Add tests for each failure mode.
+- [x] Add operator and Helm configuration notes where runtime behavior is configurable.
+- [x] Document production recommendations for each failure mode.
+
+Partially completed in `docs/sidecar-failure-modes.md`, `CONFIGURATION.md`, and the `pii-shield` Helm chart. Buffer overflow fail-open and fail-closed behavior has focused tests. File rotation, sidecar restart, application restart, disk pressure, and downstream collector bypass checks still need integration or Kubernetes-level tests.
 
 Out of grant scope because the grant plans cover testing and documentation broadly, but do not explicitly cover runtime reliability engineering for sidecar failure modes.
 

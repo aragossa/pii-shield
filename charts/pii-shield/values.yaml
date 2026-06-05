@@ -70,6 +70,9 @@ piiConfig:
   # PII_ADAPTIVE_THRESHOLD: Enable statistical learning
   adaptiveThreshold: "false"
 
+  # PII_FAIL_POLICY: open keeps log flow alive on processing failure; closed emits drop markers
+  failPolicy: "open"
+
   # PII_CUSTOM_REGEX_LIST: JSON array of regex objects to enforce redaction
   # Example: '[{"pattern": "^TX-\\d{5}$", "name": "TX"}]'
   customRegexList: ""

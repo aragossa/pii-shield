@@ -67,7 +67,8 @@ release.sh
 build.sh
 
 # Local notes
-notes
+notes/*
+!notes/out-of-grant-production-readiness.md
 
 # Grant readiness documentation
 !docs/threat-model.md
@@ -78,3 +79,5 @@ notes
 !docs/kubernetes-compatibility.md
 !docs/stdout-stderr-interception-design.md
 !docs/operational-runbooks.md
+!docs/sidecar-failure-modes.md
+!docs/operator-stabilization.md
