@@ -75,6 +75,8 @@ notes/*
 !docs/application-readiness.md
 !docs/release-verification.md
 !docs/release-notes-policy.md
+!docs/releases/
+!docs/releases/**
 !docs/production-adoption-checklist.md
 !docs/kubernetes-compatibility.md
 !docs/stdout-stderr-interception-design.md
