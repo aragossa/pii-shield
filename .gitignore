@@ -68,7 +68,6 @@ build.sh
 
 # Local notes
 notes/*
-!notes/out-of-grant-production-readiness.md
 
 # Grant readiness documentation
 !docs/threat-model.md
