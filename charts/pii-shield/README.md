@@ -57,3 +57,17 @@ You can tune the redaction engine via `values.yaml` under `piiConfig`:
 |-----|------|---------|-------------|
 | `watchFile` | string | `"/var/log/app/output.log"` | File path watched by the PII-Shield sidecar. |
 | `demo.enabled` | bool | `false` | Enables the demo-only Alpine log generator. |
+| `metrics.serviceMonitor.enabled` | bool | `false` | Render a Prometheus Operator `ServiceMonitor`. |
+| `metrics.prometheusRule.enabled` | bool | `false` | Render default Prometheus alert rules for PII-Shield availability, restarts, errors, latency, and missing throughput. |
+
+## Operational Alerts
+
+Prometheus Operator users can render the default alert rules:
+
+```bash
+helm install pii-shield pii-shield/pii-shield \
+  --set metrics.serviceMonitor.enabled=true \
+  --set metrics.prometheusRule.enabled=true
+```
+
+Tune alert labels and thresholds under `metrics.prometheusRule` before production rollout. Operational runbooks are documented in `docs/operational-runbooks.md`.

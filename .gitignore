@@ -67,7 +67,7 @@ release.sh
 build.sh
 
 # Local notes
-notes/*
+notes
 
 # Grant readiness documentation
 !docs/threat-model.md
@@ -77,3 +77,4 @@ notes/*
 !docs/production-adoption-checklist.md
 !docs/kubernetes-compatibility.md
 !docs/stdout-stderr-interception-design.md
+!docs/operational-runbooks.md

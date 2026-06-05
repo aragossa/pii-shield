@@ -92,6 +92,19 @@ metrics:
     # namespace: monitoring
     # labels:
     #   release: prometheus
+  prometheusRule:
+    enabled: false
+    # namespace: monitoring
+    labels: {}
+    alertLabels: {}
+    targetDownFor: 5m
+    restartThreshold: 0
+    restartFor: 5m
+    errorRateThreshold: 0
+    errorRateFor: 10m
+    p95LatencySeconds: 0.05
+    latencyFor: 10m
+    noThroughputFor: 30m
 
 # Operator configuration
 legacySidecarMode: false

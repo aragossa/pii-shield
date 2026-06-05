@@ -88,16 +88,18 @@ Goal: make production operation repeatable when something goes wrong.
 
 Tasks:
 
-- Write a runbook for admission webhook failures.
-- Write a runbook for sidecar injection failures.
-- Write a runbook for high false-positive incidents.
-- Write a runbook for high false-negative incidents.
-- Write a runbook for dependency/security alert response during production incidents.
-- Add Prometheus alert rules for webhook health.
-- Add Prometheus alert rules for injection failures.
-- Add Prometheus alert rules for sidecar crash or restart signals.
-- Add Prometheus alert rules for sanitizer error rates.
-- Document alert severity and suggested response time.
+- [x] Write a runbook for admission webhook failures.
+- [x] Write a runbook for sidecar injection failures.
+- [x] Write a runbook for high false-positive incidents.
+- [x] Write a runbook for high false-negative incidents.
+- [x] Write a runbook for dependency/security alert response during production incidents.
+- [x] Add Prometheus alert rules for webhook health.
+- [x] Add Prometheus alert rules for injection failures.
+- [x] Add Prometheus alert rules for sidecar crash or restart signals.
+- [x] Add Prometheus alert rules for sanitizer error rates.
+- [x] Document alert severity and suggested response time.
+
+Completed in `docs/operational-runbooks.md` and `charts/pii-shield/templates/prometheusrule.yaml`.
 
 Out of grant scope because NLnet covers Grafana and ELK visualization, but not incident runbooks or alert policy.
 
