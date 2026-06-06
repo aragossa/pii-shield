@@ -62,6 +62,9 @@ The Operator will automatically inject the secure Sidecar Agent into your Pod, c
 
 If you want to contribute to the Operator:
 
+> [!NOTE]
+> The Kustomize and `make deploy` paths in this directory are for local development, CRD generation, and manual validation of the operator source tree. For user-facing v2.x installs, use the Helm chart.
+
 ### Prerequisites
 - Go version v1.24+
 - Docker version 17.03+
@@ -89,4 +92,3 @@ make sync-helm
 ## License
 
 Distributed under the Apache 2.0 License.
-
