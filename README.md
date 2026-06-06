@@ -10,7 +10,7 @@ Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave t
 
 > [!WARNING]
 > **Upgrading to v2.0.0?**
-> We have moved entirely to a Helm-based distribution and Distroless Native Sidecars. Kustomize deployment and `/bin/sh` access inside the sidecar are no longer supported. Read the Migration Guide.
+> We have moved end-user distribution to Helm-based installs and Distroless Native Sidecars. Kustomize is no longer a supported release installation path for production users, though the operator repository still keeps Kustomize scaffolding for local development and manifest generation. `/bin/sh` access inside the PII-Shield sidecar is no longer supported. Read the Migration Guide.
 
 ## Two Deployment Models
 
