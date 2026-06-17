@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestMainSuccess(t *testing.T) {
@@ -50,6 +54,78 @@ func TestMainSuccess(t *testing.T) {
 	if len(lines) != 2 {
 		t.Errorf("expected 2 lines, got %d", len(lines))
 	}
+}
+
+// TestReadFIFO covers pipe injection mode: the sidecar reads a FIFO that has no
+// writer until the app connects. Regression guard for the bug where tail.TailFile
+// exited immediately on the empty pipe and crash-looped the sidecar. readFIFO must
+// block until a writer connects, redact what it reads, and reopen after EOF so a
+// second writer is still processed.
+func TestReadFIFO(t *testing.T) {
+	dir := t.TempDir()
+	fifo := filepath.Join(dir, "log.pipe")
+	if err := syscall.Mkfifo(fifo, 0o666); err != nil {
+		t.Fatalf("mkfifo: %v", err)
+	}
+
+	oldStdout := os.Stdout
+	rOut, wOut, _ := os.Pipe()
+	os.Stdout = wOut
+	defer func() { os.Stdout = oldStdout }()
+
+	// Collect sanitized stdout lines as readFIFO emits them.
+	outCh := make(chan string, 8)
+	go func() {
+		sc := bufio.NewScanner(rOut)
+		for sc.Scan() {
+			outCh <- sc.Text()
+		}
+		close(outCh)
+	}()
+
+	go readFIFO(fifo, false, "open")
+
+	writeLine := func(s string) {
+		w, err := os.OpenFile(fifo, os.O_WRONLY, os.ModeNamedPipe)
+		if err != nil {
+			t.Fatalf("open pipe for write: %v", err)
+		}
+		if _, err := io.WriteString(w, s); err != nil {
+			t.Fatalf("write pipe: %v", err)
+		}
+		w.Close()
+	}
+	nextLine := func() string {
+		select {
+		case line := <-outCh:
+			return line
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for sanitized line from FIFO")
+			return ""
+		}
+	}
+
+	// First writer; reading its sanitized line back confirms readFIFO blocked on
+	// the empty pipe until a writer connected, then processed the input.
+	writeLine("contact john.doe@example.com now\n")
+	line1 := nextLine()
+	if strings.Contains(line1, "john.doe@example.com") {
+		t.Errorf("email not redacted in FIFO output: %q", line1)
+	}
+	if !strings.Contains(line1, "[HIDDEN:") {
+		t.Errorf("expected redaction marker in FIFO output, got: %q", line1)
+	}
+
+	// First writer has closed (EOF). A second writer must still be served, which
+	// only works if readFIFO reopened the pipe after EOF instead of exiting.
+	writeLine("second line ok\n")
+	line2 := nextLine()
+	if !strings.Contains(line2, "second line ok") {
+		t.Errorf("second writer not processed; FIFO not reopened after EOF: %q", line2)
+	}
+
+	os.Stdout = oldStdout
+	wOut.Close()
 }
 
 func TestMainScannerError(t *testing.T) {

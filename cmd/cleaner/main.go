@@ -67,6 +67,20 @@ func main() {
 			}
 		}
 
+		// A FIFO (pipe injection mode) cannot be followed with tail: the tail
+		// library targets regular growing files and closes its Lines channel as
+		// soon as it hits EOF on the empty pipe, so the sidecar exits and
+		// crash-loops before any writer connects (the pod never becomes Ready).
+		// Read the named pipe directly instead.
+		if fi, err := os.Stat(watchFile); err == nil && fi.Mode()&os.ModeNamedPipe != 0 {
+			go func() {
+				<-sigChan
+				os.Exit(0)
+			}()
+			readFIFO(watchFile, metricsEnabled, failPolicy)
+			return
+		}
+
 		t, err := tail.TailFile(watchFile, tail.Config{
 			Follow:    true,
 			ReOpen:    true,
@@ -119,6 +133,45 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Error reading standard input:", err)
 			os.Exit(1)
 		}
+	}
+}
+
+// readFIFO continuously sanitizes lines read from a named pipe. Opening the FIFO
+// read-only blocks until a writer connects, which keeps the sidecar running so
+// the pod reaches Ready. When the writer closes the pipe (EOF) the FIFO is
+// reopened to block for the next writer; the loop ends only on SIGTERM/SIGINT
+// (handled by the os.Exit goroutine installed by the caller).
+func readFIFO(path string, metricsEnabled bool, failPolicy string) {
+	for {
+		f, err := os.OpenFile(path, os.O_RDONLY, os.ModeNamedPipe)
+		if err != nil {
+			log.Fatalf("Failed to open pipe %s: %v", path, err)
+		}
+
+		sc := bufio.NewScanner(f)
+		buf := make([]byte, 1024*1024)
+		sc.Buffer(buf, 10*1024*1024)
+
+		for sc.Scan() {
+			processLine(sc.Text(), metricsEnabled, failPolicy)
+		}
+
+		if err := sc.Err(); err != nil {
+			if metricsEnabled {
+				metrics.ErrorsTotal.Inc()
+			}
+			if err == bufio.ErrTooLong {
+				if failPolicy == "closed" {
+					fmt.Println("[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
+				} else {
+					fmt.Println("[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
+				}
+			}
+			fmt.Fprintln(os.Stderr, "Error reading pipe:", err)
+		}
+
+		// Writer closed the pipe; reopen to block for the next writer.
+		f.Close()
 	}
 }
 
