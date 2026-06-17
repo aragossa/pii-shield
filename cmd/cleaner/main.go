@@ -171,7 +171,7 @@ func readFIFO(path string, metricsEnabled bool, failPolicy string) {
 		}
 
 		// Writer closed the pipe; reopen to block for the next writer.
-		f.Close()
+		_ = f.Close()
 	}
 }
 
