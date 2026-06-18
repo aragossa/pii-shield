@@ -72,7 +72,7 @@ func main() {
 		// soon as it hits EOF on the empty pipe, so the sidecar exits and
 		// crash-loops before any writer connects (the pod never becomes Ready).
 		// Read the named pipe directly instead.
-		if fi, err := os.Stat(watchFile); err == nil && fi.Mode()&os.ModeNamedPipe != 0 {
+		if isNamedPipe(watchFile) {
 			go func() {
 				<-sigChan
 				os.Exit(0)
@@ -134,6 +134,13 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+// isNamedPipe reports whether path is a FIFO (pipe injection mode), as opposed
+// to a regular file (file injection mode).
+func isNamedPipe(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Mode()&os.ModeNamedPipe != 0
 }
 
 // readFIFO continuously sanitizes lines read from a named pipe. Opening the FIFO

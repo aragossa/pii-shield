@@ -128,6 +128,94 @@ func TestReadFIFO(t *testing.T) {
 	wOut.Close()
 }
 
+func TestIsNamedPipe(t *testing.T) {
+	dir := t.TempDir()
+
+	fifo := filepath.Join(dir, "log.pipe")
+	if err := syscall.Mkfifo(fifo, 0o666); err != nil {
+		t.Fatalf("mkfifo: %v", err)
+	}
+	if !isNamedPipe(fifo) {
+		t.Errorf("expected %s to be detected as a named pipe", fifo)
+	}
+
+	regular := filepath.Join(dir, "log.txt")
+	if err := os.WriteFile(regular, []byte("data\n"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if isNamedPipe(regular) {
+		t.Errorf("expected %s to be detected as a regular file, not a pipe", regular)
+	}
+
+	if isNamedPipe(filepath.Join(dir, "missing")) {
+		t.Errorf("expected a missing path to not be detected as a pipe")
+	}
+}
+
+// TestReadFIFOBufferOverflow exercises the FIFO error path: a line larger than
+// the scanner buffer triggers bufio.ErrTooLong, and the fail policy decides
+// whether the overflow is dropped or passed through with a warning marker.
+func TestReadFIFOBufferOverflow(t *testing.T) {
+	cases := []struct {
+		failPolicy string
+		marker     string
+	}{
+		{"open", "[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]"},
+		{"closed", "[PII_SHIELD_DROP: BUFFER_OVERFLOW]"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.failPolicy, func(t *testing.T) {
+			dir := t.TempDir()
+			fifo := filepath.Join(dir, "log.pipe")
+			if err := syscall.Mkfifo(fifo, 0o666); err != nil {
+				t.Fatalf("mkfifo: %v", err)
+			}
+
+			oldStdout := os.Stdout
+			rOut, wOut, _ := os.Pipe()
+			os.Stdout = wOut
+			defer func() { os.Stdout = oldStdout }()
+
+			outCh := make(chan string, 8)
+			go func() {
+				sc := bufio.NewScanner(rOut)
+				sc.Buffer(make([]byte, 1024*1024), 20*1024*1024)
+				for sc.Scan() {
+					outCh <- sc.Text()
+				}
+				close(outCh)
+			}()
+
+			go readFIFO(fifo, false, tc.failPolicy)
+
+			// A line larger than readFIFO's 10MB buffer with no newline forces
+			// bufio.ErrTooLong. Write from a goroutine: readFIFO closes the pipe
+			// on the error, so the remaining bytes may fail with EPIPE.
+			go func() {
+				w, err := os.OpenFile(fifo, os.O_WRONLY, os.ModeNamedPipe)
+				if err != nil {
+					return
+				}
+				_, _ = io.WriteString(w, strings.Repeat("A", 10*1024*1024+1))
+				_ = w.Close()
+			}()
+
+			select {
+			case line := <-outCh:
+				if !strings.Contains(line, tc.marker) {
+					t.Errorf("expected overflow marker %q, got: %q", tc.marker, line)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("timed out waiting for buffer-overflow marker from FIFO")
+			}
+
+			os.Stdout = oldStdout
+			wOut.Close()
+		})
+	}
+}
+
 func TestMainScannerError(t *testing.T) {
 	if os.Getenv("TEST_MAIN_ERROR") == "1" {
 		main()
