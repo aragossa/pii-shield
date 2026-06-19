@@ -152,20 +152,23 @@ func TestIsNamedPipe(t *testing.T) {
 	}
 }
 
-// TestReadFIFOBufferOverflow exercises the FIFO error path: a line larger than
-// the scanner buffer triggers bufio.ErrTooLong, and the fail policy decides
-// whether the overflow is dropped or passed through with a warning marker.
-func TestReadFIFOBufferOverflow(t *testing.T) {
+// TestStreamPipeOnceBufferOverflow exercises the FIFO error path: a line larger
+// than the scanner buffer triggers bufio.ErrTooLong, and the fail policy decides
+// whether the overflow is dropped or passed through with a warning marker. The
+// metricsEnabled case also covers the error-metric increment.
+func TestStreamPipeOnceBufferOverflow(t *testing.T) {
 	cases := []struct {
-		failPolicy string
-		marker     string
+		name           string
+		failPolicy     string
+		metricsEnabled bool
+		marker         string
 	}{
-		{"open", "[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]"},
-		{"closed", "[PII_SHIELD_DROP: BUFFER_OVERFLOW]"},
+		{"open", "open", false, "[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]"},
+		{"closed_with_metrics", "closed", true, "[PII_SHIELD_DROP: BUFFER_OVERFLOW]"},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.failPolicy, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			fifo := filepath.Join(dir, "log.pipe")
 			if err := syscall.Mkfifo(fifo, 0o666); err != nil {
@@ -187,11 +190,12 @@ func TestReadFIFOBufferOverflow(t *testing.T) {
 				close(outCh)
 			}()
 
-			go readFIFO(fifo, false, tc.failPolicy)
+			done := make(chan error, 1)
+			go func() { done <- streamPipeOnce(fifo, tc.metricsEnabled, tc.failPolicy) }()
 
-			// A line larger than readFIFO's 10MB buffer with no newline forces
-			// bufio.ErrTooLong. Write from a goroutine: readFIFO closes the pipe
-			// on the error, so the remaining bytes may fail with EPIPE.
+			// A line larger than the 10MB buffer with no newline forces
+			// bufio.ErrTooLong. streamPipeOnce closes the pipe on the error, so
+			// the remaining bytes may fail with EPIPE.
 			go func() {
 				w, err := os.OpenFile(fifo, os.O_WRONLY, os.ModeNamedPipe)
 				if err != nil {
@@ -210,9 +214,27 @@ func TestReadFIFOBufferOverflow(t *testing.T) {
 				t.Fatal("timed out waiting for buffer-overflow marker from FIFO")
 			}
 
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Errorf("streamPipeOnce returned error on EOF: %v", err)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("streamPipeOnce did not return after writer closed")
+			}
+
 			os.Stdout = oldStdout
 			wOut.Close()
 		})
+	}
+}
+
+// TestStreamPipeOnceOpenError covers the open-failure path: a path that is not a
+// readable pipe makes streamPipeOnce return an error (which readFIFO turns fatal).
+func TestStreamPipeOnceOpenError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist.pipe")
+	if err := streamPipeOnce(missing, false, "open"); err == nil {
+		t.Errorf("expected an error opening a nonexistent pipe, got nil")
 	}
 }
 

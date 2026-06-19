@@ -150,36 +150,46 @@ func isNamedPipe(path string) bool {
 // (handled by the os.Exit goroutine installed by the caller).
 func readFIFO(path string, metricsEnabled bool, failPolicy string) {
 	for {
-		f, err := os.OpenFile(path, os.O_RDONLY, os.ModeNamedPipe)
-		if err != nil {
+		if err := streamPipeOnce(path, metricsEnabled, failPolicy); err != nil {
 			log.Fatalf("Failed to open pipe %s: %v", path, err)
 		}
-
-		sc := bufio.NewScanner(f)
-		buf := make([]byte, 1024*1024)
-		sc.Buffer(buf, 10*1024*1024)
-
-		for sc.Scan() {
-			processLine(sc.Text(), metricsEnabled, failPolicy)
-		}
-
-		if err := sc.Err(); err != nil {
-			if metricsEnabled {
-				metrics.ErrorsTotal.Inc()
-			}
-			if err == bufio.ErrTooLong {
-				if failPolicy == "closed" {
-					fmt.Println("[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
-				} else {
-					fmt.Println("[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
-				}
-			}
-			fmt.Fprintln(os.Stderr, "Error reading pipe:", err)
-		}
-
-		// Writer closed the pipe; reopen to block for the next writer.
-		_ = f.Close()
+		// Writer closed the pipe; loop to reopen and block for the next writer.
 	}
+}
+
+// streamPipeOnce opens the FIFO (blocking until a writer connects), sanitizes
+// every line until the writer closes the pipe (EOF), then returns. It returns a
+// non-nil error only if the pipe could not be opened.
+func streamPipeOnce(path string, metricsEnabled bool, failPolicy string) error {
+	f, err := os.OpenFile(path, os.O_RDONLY, os.ModeNamedPipe)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	sc := bufio.NewScanner(f)
+	buf := make([]byte, 1024*1024)
+	sc.Buffer(buf, 10*1024*1024)
+
+	for sc.Scan() {
+		processLine(sc.Text(), metricsEnabled, failPolicy)
+	}
+
+	if err := sc.Err(); err != nil {
+		if metricsEnabled {
+			metrics.ErrorsTotal.Inc()
+		}
+		if err == bufio.ErrTooLong {
+			if failPolicy == "closed" {
+				fmt.Println("[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
+			} else {
+				fmt.Println("[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
+			}
+		}
+		fmt.Fprintln(os.Stderr, "Error reading pipe:", err)
+	}
+
+	return nil
 }
 
 func processLine(text string, metricsEnabled bool, failPolicy string) {
