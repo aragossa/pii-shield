@@ -1,0 +1,34 @@
+# Per-Dockerfile ignore for Dockerfile.agent. BuildKit uses this instead of the
+# shared .dockerignore for `docker build -f Dockerfile.agent`. The agent image
+# only builds ./cmd/cleaner from the root Go module, so everything else —
+# especially the 3.3 GB notes/log_example fixture and the test tree — is excluded
+# to keep the build context small. The replay image uses a different build (its
+# own context filter) and still gets notes/ and tests/.
+.git
+.github
+.DS_Store
+
+coverage.out
+cover.out
+*.test
+*.prof
+*.wasm
+
+dist
+build
+tmp
+vendor
+node_modules
+
+.cache
+.gocache
+bin
+pii-shield
+operator
+
+# Not needed to build cmd/cleaner; notes holds the multi-GB replay fixture.
+notes
+tests
+
+README.md
+MANUAL_TESTING.md
