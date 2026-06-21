@@ -135,7 +135,9 @@ func envTruthy(s string) bool {
 	}
 }
 
-func loadConfig() Config {
+// DefaultConfig returns the built-in defaults (no env vars, no salt). Embedders
+// like the WASM SDKs build on it so a partial override won't wipe SensitiveKeys.
+func DefaultConfig() Config {
 	cfg := Config{
 		EntropyThreshold:        DefaultEntropyThreshold, // Adjusted for bigrams
 		ConfidenceThreshold:     1.0,                     // High confidence required to skip false positives
@@ -144,7 +146,19 @@ func loadConfig() Config {
 		BigramDefaultScore:      -7.0,                    // Default for unknown bigrams
 		AdaptiveThreshold:       false,                   // Disabled by default (User feedback)
 		AdaptiveBaselineSamples: 100,                     // Default baseline sample size
+		SensitiveKeys: []string{
+			"pass", "secret", "token", "key", "cvv", "cvc", "auth", "sign",
+			"password", "passwd", "api_key", "apikey", "access_token", "client_secret",
+		},
 	}
+	for i, k := range cfg.SensitiveKeys {
+		cfg.SensitiveKeys[i] = strings.ToLower(strings.TrimSpace(k))
+	}
+	return cfg
+}
+
+func loadConfig() Config {
+	cfg := DefaultConfig()
 
 	// Load Salt - CRITICAL SECURITY: Try secure, fallback to error log (don't panic library)
 	if envSalt := os.Getenv("PII_SALT"); envSalt != "" {
@@ -209,18 +223,13 @@ func loadConfig() Config {
 		}
 	}
 
-	// Load Sensitive Keys
+	// Load Sensitive Keys (overrides the defaults seeded by DefaultConfig)
 	if envKeys := os.Getenv("PII_SENSITIVE_KEYS"); envKeys != "" {
 		cfg.SensitiveKeys = strings.Split(envKeys, ",")
-	} else {
-		cfg.SensitiveKeys = []string{
-			"pass", "secret", "token", "key", "cvv", "cvc", "auth", "sign",
-			"password", "passwd", "api_key", "apikey", "access_token", "client_secret",
+		// Normalized
+		for i, k := range cfg.SensitiveKeys {
+			cfg.SensitiveKeys[i] = strings.ToLower(strings.TrimSpace(k))
 		}
-	}
-	// Normalized
-	for i, k := range cfg.SensitiveKeys {
-		cfg.SensitiveKeys[i] = strings.ToLower(strings.TrimSpace(k))
 	}
 
 	// Load Sensitive Key Patterns (regex)
@@ -572,6 +581,12 @@ func scanLine(logLine string, sb *strings.Builder) {
 				return
 			}
 		}
+		if strings.HasPrefix(trimmed, "{") {
+			if jsonProcessed, ok := processJSONLine(trimmed); ok {
+				sb.WriteString(jsonProcessed)
+				return
+			}
+		}
 	*/
 
 	luhnRanges := FindLuhnSequences(logLine)
@@ -725,6 +740,8 @@ func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive b
 		// Optimization Phase 3 Regression Fix:
 		// If we are in a Value position, and the value is a quoted string,
 		// we must "unwrap" it and scan the specific content for embedded secrets
+		// If we are in a Value position, and the value is a quoted string,
+		// we must "unwrap" it and scan the specific content for embedded secrets
 		// (e.g. JSON fields containing long error messages or nested structures).
 		// We only do this if NOT forcedSensitive (if forced, we redact the whole thing anyway).
 		if !forcedSensitive && len(rawToken) >= 2 {
@@ -827,8 +844,10 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 			}
 		} else {
 			// ... fallback ...
+			// ... fallback ...
 			for _, rule := range currentConfig.CustomRegexes {
 				if rule.Regexp.MatchString(content) {
+					// ... redaction ...
 					// ... redaction ...
 					needsQuotes := false
 					if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
@@ -1030,6 +1049,7 @@ func processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Bui
 			}
 		} else {
 			// Unbalanced or strict string? Fallback to normal index?
+			// Unbalanced or strict string? Fallback to normal index?
 			// If unbalanced, treat as normal string.
 			idx = strings.IndexByte(rawToken, ':')
 		}
@@ -1057,7 +1077,9 @@ func processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Bui
 
 		sb.WriteString(keyRaw) // Write original key (with quotes)
 		sb.WriteRune(':')
-		processSingleToken(val, val, keySensitive, false, false, sb)
+		// Strip quotes for the safety check but keep the quoted form for output;
+		// otherwise compact JSON ("k":"v") hides safe values (timestamps) from isSafe().
+		processSingleToken(trimQuotes(val), val, keySensitive, false, false, sb)
 
 		return keySensitive, true
 	}

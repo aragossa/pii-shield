@@ -49,12 +49,10 @@ func init_config(ptr uint32, length uint32) {
 	// Reconstruct the byte slice from host memory
 	b := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(ptr))), length)
 
-	// Default config
-	cfg := scanner.Config{
-		EntropyThreshold:    4.2,
-		ConfidenceThreshold: 1.0,
-		Salt:                []byte("pii-shield-default-salt-12345678"),
-	}
+	// Seed from real defaults so a partial SDK override (e.g. just a salt) keeps
+	// SensitiveKeys and the entropy threshold; only provided fields are applied.
+	cfg := scanner.DefaultConfig()
+	cfg.Salt = []byte("pii-shield-default-salt-12345678")
 
 	var sdkCfg ConfigFromSDK
 	if err := json.Unmarshal(b, &sdkCfg); err == nil {
