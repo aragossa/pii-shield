@@ -16,4 +16,11 @@ if [[ -z "${EXTRA_HELM_ARGS:-}" && -z "${VALUES_FILE:-}" ]]; then
   EXTRA_HELM_ARGS="--set image.repository=ghcr.io/pii-shield/pii-shield-operator --set image.tag=${image_tag} --set sidecar.image.repository=ghcr.io/pii-shield/pii-shield-agent --set sidecar.image.tag=${image_tag} --set webhook.useCertManager=false"
 fi
 
+# Reclaim fields that a manual `kubectl set` (field manager "kubectl-set") may
+# own, e.g. env[AGENT_IMAGE].value; otherwise install/upgrade fails with a
+# server-side apply ownership conflict. The flag is only valid for these actions.
+if [[ "${action}" == "install" || "${action}" == "upgrade" ]]; then
+  EXTRA_HELM_ARGS="${EXTRA_HELM_ARGS:-} --take-ownership"
+fi
+
 run_helm_chart_action "${action}" "${chart_ref}" "${release}" "${namespace}"

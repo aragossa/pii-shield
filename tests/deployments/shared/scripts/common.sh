@@ -161,6 +161,34 @@ EOF
   esac
 }
 
+# Ensure the local kind cluster behind the current kube-context actually exists,
+# recreating it if missing. A common failure mode: the kubeconfig still has a
+# `kind-<name>` context but the cluster behind it was deleted (e.g. a Docker
+# Desktop reset), so every `kind load`/kubectl call fails with "no nodes found".
+# Only acts on kind contexts (or no context at all); minikube/remote are left as
+# is. Set ENSURE_CLUSTER_SKIP=true to bypass.
+ensure_local_cluster() {
+  [[ "${ENSURE_CLUSTER_SKIP:-false}" == "true" ]] && return 0
+  local context
+  context="$(kubectl config current-context 2>/dev/null || true)"
+
+  # Leave non-kind targets (minikube, real clusters) to the caller.
+  if [[ -n "${context}" && "${context}" != kind-* ]]; then
+    return 0
+  fi
+
+  local cluster="${KIND_CLUSTER:-${context#kind-}}"
+  cluster="${cluster:-pii-shield-manual}"
+
+  if kind get clusters 2>/dev/null | grep -qx "${cluster}"; then
+    return 0
+  fi
+
+  echo "kind cluster '${cluster}' not found; creating it" >&2
+  kind create cluster --name "${cluster}" --wait 120s
+  kubectl config use-context "kind-${cluster}" >/dev/null 2>&1 || true
+}
+
 load_image_into_current_local_cluster() {
   local image="$1"
   local context
