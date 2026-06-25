@@ -57,12 +57,14 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image is built FROM scratch and has no shell, so drive the
+          # binary directly. --watch-file waits for the file to appear and then
+          # follows it (equivalent to tail -F), tracking rotation/recreation.
           command:
-            - /bin/sh
-            - -c
-            # Use tail -F (capital F) to track the file even if it's rotated/recreated,
-            # and pipe it into the pii-shield binary.
-            - "touch /var/log/app/output.log && tail -F /var/log/app/output.log | /pii-shield"
+            - /pii-shield
+          args:
+            - --watch-file
+            - /var/log/app/output.log
           {{- if .Values.metrics.enabled }}
           ports:
             - name: http-metrics

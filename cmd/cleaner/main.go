@@ -67,6 +67,34 @@ func main() {
 			}
 		}
 
+		// Pipe injection mode points --watch-file at a named pipe (FIFO). The
+		// tail library does not stay attached to a FIFO: it hits EOF, closes its
+		// Lines channel and we exit, which crash-loops the native sidecar so the
+		// pod never becomes Ready. Read the FIFO directly instead — each open
+		// blocks until a writer appears and read returns EOF when all writers
+		// close, so reopening in a loop keeps the agent alive across writers.
+		if info, err := os.Stat(watchFile); err == nil && info.Mode()&os.ModeNamedPipe != 0 {
+			go func() {
+				<-sigChan
+				os.Exit(0)
+			}()
+			for {
+				f, err := os.Open(watchFile) // blocks until a writer opens the FIFO
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "Error opening pipe:", err)
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+				scan := bufio.NewScanner(f)
+				buf := make([]byte, 1024*1024)
+				scan.Buffer(buf, 10*1024*1024)
+				for scan.Scan() {
+					processLine(scan.Text(), metricsEnabled, failPolicy)
+				}
+				f.Close()
+			}
+		}
+
 		t, err := tail.TailFile(watchFile, tail.Config{
 			Follow:    true,
 			ReOpen:    true,
