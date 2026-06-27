@@ -16,6 +16,22 @@ require_access_log_fixture() {
   printf '%s\n' "${fixture}"
 }
 
+# Stream a bounded sample of the access-log fixture to stdout for piping into a
+# test container. The fixture is multi-GB (~10M lines); streaming it whole over
+# a `kubectl exec` websocket breaks the connection ("broken pipe"/"i/o timeout")
+# and makes results non-deterministic. A fixed head is a representative sample
+# that streams quickly and reliably. Override the size with FIXTURE_LINES, or
+# set FIXTURE_LINES=0 to stream the entire file.
+stream_fixture() {
+  local fixture="$1"
+  local lines="${FIXTURE_LINES:-50000}"
+  if [[ "${lines}" -le 0 ]]; then
+    cat "${fixture}"
+  else
+    head -n "${lines}" "${fixture}"
+  fi
+}
+
 ensure_output_dir() {
   local name="$1"
   local output_dir="${OUTPUT_DIR:-/tmp/pii-shield-sanitized/${name}}"

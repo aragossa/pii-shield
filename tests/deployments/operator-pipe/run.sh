@@ -49,7 +49,7 @@ spec:
 YAML
 
 kubectl wait --for=condition=ready pod/pii-pipe-test -n "${namespace}" --timeout=120s
-kubectl exec -i pii-pipe-test -n "${namespace}" -c app -- sh -c 'cat > /shared/log.pipe' < "${fixture}"
+stream_fixture "${fixture}" | kubectl exec -i pii-pipe-test -n "${namespace}" -c app -- sh -c 'cat > /shared/log.pipe'
 sleep "${DRAIN_SECONDS:-30}"
 kubectl logs pii-pipe-test -n "${namespace}" -c pii-shield-sidecar > "${output_dir}/access.sanitized.log"
 assert_sanitized_file "${output_dir}/access.sanitized.log"
