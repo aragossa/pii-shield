@@ -9,7 +9,11 @@ namespace="${NAMESPACE:-default}"
 fail_policy="$(operator_fail_policy)"
 warn_operator_unsupported_pii_env
 
-require_operator_installed
+# Make sure a local kind cluster exists (recreate it if it was deleted), then make sure
+# the operator itself is installed in it — installing the operator if it is missing — so
+# this test can run from scratch without any manual setup.
+ensure_local_cluster
+ensure_operator_installed
 warn_pipe_agent_compat
 
 kubectl label namespace "${namespace}" pii-shield.io/injection=enabled --overwrite

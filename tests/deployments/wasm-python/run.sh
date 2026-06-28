@@ -5,33 +5,27 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../shared/scripts" && pwd)/common.s
 repo_root="$(deployment_repo_root)"
 fixture="$(require_access_log_fixture "${repo_root}")"
 output_dir="$(ensure_output_dir wasm-python)"
-venv="${VENV:-/tmp/pii-shield-python-check}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+image="${PII_PY_IMAGE:-python:3.11-slim}"
 prepare_pii_env_args
 
-python3 -m venv "${venv}"
-source "${venv}/bin/activate"
-pip install pii-shield-wasi
+# Run the Python SDK inside a Linux container. The wasmtime runtime the SDK uses is
+# SIGKILLed (`Killed: 9`) ~2s after loading the WASM module on macOS — a wasmtime-on-macOS
+# problem, not a pii-shield bug (the identical .wasm runs fine under Node on macOS and
+# under wasmtime on Linux; see README.md). Running in a container makes the test
+# host-OS-independent. Mounts: the fixture (read-only), the redaction script (read-only),
+# and the output dir so the sanitized log lands on the host.
+if ! command -v docker >/dev/null 2>&1; then
+  echo "docker is required: this test runs the Python SDK inside a Linux container (wasmtime is killed on macOS). See README.md." >&2
+  exit 1
+fi
 
-env "${pii_process_env_args[@]}" python - "${fixture}" "${output_dir}/access.sanitized.log" <<'PY'
-import os
-import sys
-from pathlib import Path
-from pii_shield import PiiShield, PiiShieldConfig
-
-src = Path(sys.argv[1])
-dst = Path(sys.argv[2])
-dst.parent.mkdir(parents=True, exist_ok=True)
-
-config = PiiShieldConfig(
-    entropy_threshold=float(os.environ["PII_ENTROPY_THRESHOLD"]) if os.environ.get("PII_ENTROPY_THRESHOLD") else None,
-    confidence_score=float(os.environ["PII_CONFIDENCE_THRESHOLD"]) if os.environ.get("PII_CONFIDENCE_THRESHOLD") else None,
-    salt=os.environ.get("PII_SALT"),
-    fail_policy=os.environ.get("PII_FAIL_POLICY", "open"),
-)
-shield = PiiShield(config)
-with src.open("r", errors="replace") as inp, dst.open("w") as out:
-    for line in inp:
-        out.write(shield.redact(line.rstrip("\n")) + "\n")
-PY
+docker run --rm \
+  ${pii_docker_env_args[@]+"${pii_docker_env_args[@]}"} \
+  -v "${fixture}":/fixture:ro \
+  -v "${script_dir}/redact.py":/redact.py:ro \
+  -v "${output_dir}":/out \
+  "${image}" \
+  bash -c "pip install -q pii-shield-wasi && python /redact.py /fixture /out/access.sanitized.log"
 
 assert_sanitized_file "${output_dir}/access.sanitized.log"

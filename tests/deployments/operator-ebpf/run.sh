@@ -5,7 +5,11 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../shared/scripts" && pwd)/common.s
 
 namespace="${NAMESPACE:-default}"
 
-require_operator_installed
+# Make sure a local kind cluster exists (recreate it if it was deleted), then make sure
+# the operator itself is installed in it — installing the operator if it is missing — so
+# this test can run from scratch without any manual setup.
+ensure_local_cluster
+ensure_operator_installed
 
 kubectl label namespace "${namespace}" pii-shield.io/injection=enabled --overwrite
 kubectl apply -n "${namespace}" -f - <<'YAML'

@@ -7,6 +7,8 @@ image_tag="${IMAGE_TAG:-manual-$(date +%Y%m%d%H%M%S)}"
 operator_image="ghcr.io/pii-shield/pii-shield-operator:${image_tag}"
 agent_image="ghcr.io/pii-shield/pii-shield-agent:${image_tag}"
 
+# Make sure a local kind cluster exists before we load images and deploy into it
+# (recreate it if it was deleted), so the steps below have somewhere to run.
 ensure_local_cluster
 
 (

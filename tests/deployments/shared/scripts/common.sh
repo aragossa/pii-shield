@@ -135,6 +135,37 @@ EOF
   exit 1
 }
 
+# Make sure the PII-Shield operator is running in the current cluster, installing it if
+# it is missing. The pipe and eBPF tests need the operator (its mutating webhook and the
+# PiiPolicy CRD) to already be there. Instead of stopping and telling you to install it by
+# hand (what require_operator_installed does), this sets it up for you so each test is
+# self-contained. Override the chart with OPERATOR_CHART_REF if you need a different one.
+ensure_operator_installed() {
+  # The PiiPolicy CRD only exists after the operator chart is installed, so we use its
+  # presence as the "is the operator already here?" check.
+  if kubectl get crd piipolicies.core.pii-shield.io >/dev/null 2>&1; then
+    return
+  fi
+
+  local repo_root chart
+  repo_root="$(deployment_repo_root)"
+  chart="${OPERATOR_CHART_REF:-${repo_root}/charts/pii-shield-operator}"
+
+  echo "PII-Shield operator not found in this cluster; installing it from ${chart} ..." >&2
+
+  # Install (or upgrade) the operator from its Helm chart using the chart's default
+  # published images, so no local image build is required. webhook.useCertManager=false
+  # lets the chart manage its own webhook certificates without needing cert-manager.
+  helm upgrade --install pii-shield-operator "${chart}" \
+    --namespace operator-system --create-namespace \
+    --set webhook.useCertManager=false \
+    --wait --timeout "${HELM_TIMEOUT:-180s}"
+
+  # Wait until the operator pod is actually serving before the caller starts creating
+  # PiiPolicies and pods that depend on the webhook.
+  kubectl rollout status deployment/pii-shield-operator -n operator-system --timeout=120s
+}
+
 # Print the agent image the operator will inject, if discoverable. The operator
 # deployment name differs by install path (operator-controller-manager for
 # kustomize, pii-shield-operator for helm), so scan all deployments in the

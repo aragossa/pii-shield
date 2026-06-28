@@ -6,6 +6,9 @@ repo_root="$(deployment_repo_root)"
 operator_image="${OPERATOR_IMAGE:-controller:manual}"
 agent_image="${AGENT_IMAGE:-pii-shield-agent:manual}"
 
+# Make sure a local kind cluster exists before we load images and deploy into it
+# (recreate it if it was deleted), so the steps below have somewhere to run.
+ensure_local_cluster
 require_cert_manager_crds
 
 (

@@ -6,6 +6,9 @@ repo_root="$(deployment_repo_root)"
 fixture="$(require_access_log_fixture "${repo_root}")"
 output_dir="$(ensure_output_dir standalone-helm-published)"
 
+# Make sure a local kind cluster exists before we install the chart into it
+# (recreate it if it was deleted), so the install below has somewhere to run.
+ensure_local_cluster
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/chart.sh" upgrade
 
 pod="$(kubectl get pod -n pii-shield-demo -l app.kubernetes.io/name=pii-shield -o jsonpath='{.items[0].metadata.name}')"
