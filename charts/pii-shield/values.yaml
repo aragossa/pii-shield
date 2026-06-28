@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: thelisdeep/pii-shield
   pullPolicy: IfNotPresent
-  tag: "2.1.0"
+  tag: "2.1.1"
 
 watchFile: /var/log/app/output.log
 
