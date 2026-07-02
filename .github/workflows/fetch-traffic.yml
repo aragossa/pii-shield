@@ -33,6 +33,15 @@ jobs:
           curl -sS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/pii-shield/pii-shield/traffic/popular/referrers \
             > stats-repo/data/traffic_popular_referrers.json
+      
+      - name: Fetch stars count
+        env:
+          GH_TOKEN: ${{ secrets.GH_TRAFFIC_TOKEN }}
+        run: |
+          curl -sS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/pii-shield/pii-shield \
+            | jq -c '{stargazers_count, date: (now | gmtime | strftime("%Y-%m-%d"))}' \
+            >> stats-repo/data/stars_history.jsonl
 
       - name: Commit and push to private repo
         working-directory: stats-repo
