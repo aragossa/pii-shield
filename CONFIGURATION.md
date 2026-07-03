@@ -20,7 +20,7 @@ Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail ins
 |----------|-------------|---------|
 | `PII_ENTROPY_THRESHOLD` | Shannon entropy threshold (3.0 - 8.0). Higher = fewer false positives, but might miss simple passwords. | `3.6` |
 | `PII_MIN_SECRET_LENGTH` | Minimum length of a string to be considered a candidate token. | `6` |
-| `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive). | `password,secret,token,key,api_key...` |
+| `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive). | `password,secret,token,key,api_key,aws_access_key_id,aws_secret_access_key,gcp_credentials,slack_token...` |
 | `PII_SENSITIVE_KEY_PATTERNS` | Comma-separated list of regex patterns for key detection. | (empty) |
 
 ## Advanced Features

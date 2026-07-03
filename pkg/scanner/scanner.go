@@ -149,6 +149,7 @@ func DefaultConfig() Config {
 		SensitiveKeys: []string{
 			"pass", "secret", "token", "key", "cvv", "cvc", "auth", "sign",
 			"password", "passwd", "api_key", "apikey", "access_token", "client_secret",
+			"aws_access_key_id", "aws_secret_access_key", "gcp_credentials", "slack_token",
 		},
 	}
 	for i, k := range cfg.SensitiveKeys {
