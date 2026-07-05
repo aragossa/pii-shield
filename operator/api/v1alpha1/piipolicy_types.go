@@ -29,14 +29,19 @@ type PiiPolicySpec struct {
 	// ConfidenceThreshold is the threshold for PII scanner
 	ConfidenceThreshold float32 `json:"confidenceThreshold,omitempty"`
 
-	// InjectionMode defines the mode: "file", "pipe", or "ebpf"
+	// InjectionMode defines the mode: "file", "pipe", or "ebpf".
+	// "pipe" mode is EXPERIMENTAL: it rewrites the target container command
+	// through "/bin/sh -c", which can break distroless images (no shell),
+	// argument quoting, signal handling, and the app lifecycle. Not
+	// recommended for production; see KNOWN_LIMITATIONS.md.
 	// +kubebuilder:validation:Enum=file;pipe;ebpf
 	InjectionMode string `json:"injectionMode"`
 
 	// LogPath is the path where the application writes logs (for "file" mode)
 	LogPath string `json:"logPath,omitempty"`
 
-	// OriginalCommand is the original app command (for "pipe" mode)
+	// OriginalCommand is the original app command (for the experimental
+	// "pipe" mode); it is executed through "/bin/sh -c"
 	OriginalCommand string `json:"originalCommand,omitempty"`
 
 	// Resources allows configuration of compute resources for the injected sidecar

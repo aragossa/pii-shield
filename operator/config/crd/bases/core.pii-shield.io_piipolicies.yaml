@@ -46,7 +46,12 @@ spec:
                 description: FailPolicy determines the behavior on failure
                 type: string
               injectionMode:
-                description: 'InjectionMode defines the mode: "file", "pipe", or "ebpf"'
+                description: |-
+                  InjectionMode defines the mode: "file", "pipe", or "ebpf".
+                  "pipe" mode is EXPERIMENTAL: it rewrites the target container command
+                  through "/bin/sh -c", which can break distroless images (no shell),
+                  argument quoting, signal handling, and the app lifecycle. Not
+                  recommended for production; see KNOWN_LIMITATIONS.md.
                 enum:
                 - file
                 - pipe
@@ -57,8 +62,9 @@ spec:
                   (for "file" mode)
                 type: string
               originalCommand:
-                description: OriginalCommand is the original app command (for "pipe"
-                  mode)
+                description: |-
+                  OriginalCommand is the original app command (for the experimental
+                  "pipe" mode); it is executed through "/bin/sh -c"
                 type: string
               resources:
                 description: Resources allows configuration of compute resources for

@@ -159,7 +159,7 @@ Mitigations:
 ## Residual Risks
 
 - Full transparent interception of Kubernetes `stdout` and `stderr` logs is not complete.
-- Pipe mode changes the target container command and must be tested per workload.
+- Pipe mode is experimental: it rewrites the target container command through `/bin/sh -c` and can break distroless images, argument quoting, and signal handling.
 - The Kubernetes operator is in stabilization.
 - eBPF interception, Proxy-Wasm gateway integration, and hosted control-plane features are R&D until marked stable.
 - Redaction is probabilistic for some high-entropy and context-sensitive cases; custom rules and representative validation remain necessary.

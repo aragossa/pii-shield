@@ -1,13 +1,19 @@
 package webhook
 
 import (
+	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	piishieldv1alpha1 "github.com/pii-shield/pii-shield/operator/api/v1alpha1"
 )
@@ -146,4 +152,45 @@ func TestInjectPipeMode(t *testing.T) {
 	assert.Len(t, mutated.Spec.Containers, 2)
 	sidecar := mutated.Spec.Containers[1]
 	assert.Equal(t, "pii-shield-sidecar", sidecar.Name)
+}
+
+func TestHandlePipeModeReturnsExperimentalWarning(t *testing.T) {
+	scheme := runtime.NewScheme()
+	assert.NoError(t, corev1.AddToScheme(scheme))
+	assert.NoError(t, piishieldv1alpha1.AddToScheme(scheme))
+
+	policy := &piishieldv1alpha1.PiiPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "default", Namespace: "test-ns"},
+		Spec:       piishieldv1alpha1.PiiPolicySpec{InjectionMode: "pipe"},
+	}
+	mutator := &PodMutator{
+		Client:            fake.NewClientBuilder().WithScheme(scheme).WithObjects(policy).Build(),
+		Decoder:           admission.NewDecoder(scheme),
+		LegacySidecarMode: true,
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "app",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"pii-shield.io/inject": "true"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "app", Command: []string{"node", "app.js"}}},
+		},
+	}
+	raw, err := json.Marshal(pod)
+	assert.NoError(t, err)
+
+	resp := mutator.Handle(context.Background(), admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Namespace: "test-ns",
+			Object:    runtime.RawExtension{Raw: raw},
+		},
+	})
+	assert.True(t, resp.Allowed)
+	assert.NotEmpty(t, resp.Patches)
+	assert.Len(t, resp.Warnings, 1)
+	assert.Contains(t, resp.Warnings[0], "experimental")
+	assert.Contains(t, resp.Warnings[0], "/bin/sh -c")
 }

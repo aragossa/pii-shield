@@ -40,6 +40,14 @@ Once installed, you can protect any application by applying a `PiiPolicy` and ad
      injectionMode: "file"
    ```
 
+   Supported `injectionMode` values:
+
+   | Mode | Status | Description |
+   |------|--------|-------------|
+   | `file` | Stable (default) | The sidecar tails a log file on a shared `emptyDir` volume. Recommended for production. |
+   | `pipe` | **Experimental** | Rewrites the target container command through `/bin/sh -c` to redirect output into a named pipe. Can break distroless images (no shell), argument quoting, signal handling, and the app lifecycle. The webhook returns a warning on injection. Not recommended for production. |
+   | `ebpf` | Experimental / R&D | Kernel-level interception prototype. Not production-ready. |
+
 2. **Label your Application Pods:**
    ```yaml
    apiVersion: apps/v1

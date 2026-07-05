@@ -6,7 +6,7 @@ PII-Shield is released and usable, but not yet fully production-hardened across 
 
 - The default file-based sidecar mode expects the application to write logs to the configured file path.
 - Full transparent interception of standard Kubernetes `stdout`/`stderr` logs is not complete yet.
-- Pipe mode changes the target container command and should be tested carefully before production use.
+- Pipe mode is experimental and not recommended for production. It rewrites the target container command through `/bin/sh -c`, which can break distroless images (no shell), argument quoting, signal handling, and the app lifecycle. The webhook returns a warning when a pipe-mode policy is applied.
 
 ## Operator
 
