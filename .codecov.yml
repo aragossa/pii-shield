@@ -11,3 +11,4 @@ coverage:
         
 ignore:
   - "cmd/wasm-ffi/main.go"
+  - "**/zz_generated*.go"
