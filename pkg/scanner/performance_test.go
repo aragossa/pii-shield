@@ -23,6 +23,7 @@ func resetConfig() {
 		SensitiveKeys: []string{
 			"pass", "secret", "token", "key", "cvv", "cvc", "auth", "sign",
 			"password", "passwd", "api_key", "apikey", "access_token", "client_secret",
+			"aws_access_key_id", "aws_secret_access_key", "gcp_credentials", "slack_token",
 		},
 	}
 	sensitiveRegex = nil
@@ -102,7 +103,7 @@ func BenchmarkBlacklist_Regex(b *testing.B) {
 	pattern := `(?i)(custom_secret|super_confidential)`
 	re := regexp.MustCompile(pattern)
 	sensitiveRegex = re // Direct assignment for test
-	
+
 	// A key NOT in static list, but matches regex
 	key := "custom_secret"
 

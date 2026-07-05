@@ -82,11 +82,11 @@ func TestScanner_NegativeCases(t *testing.T) {
 		input        string
 		shouldRedact bool
 	}{
-		{"Weak Password", "password=123", true},                     // Should be redacted because key 'password' is sensitive
-		{"Common Word", "key=value", true},                          // Should be redacted because key 'key' is sensitive
-		{"High Entropy Secret", "api_key=sk_live_51Nc7qE...", true}, // Should be redacted
-		{"Random Noise", "data=8f7d9a2b3c4e5f6", true},              // High entropy hex
-		{"Valid Visa (Luhn)", "cc=4556737586899855", true},          // Valid Luhn with enough distinct digits (7 > 4)
+		{"Weak Password", "password=123", true},                                                       // Should be redacted because key 'password' is sensitive
+		{"Common Word", "key=value", true},                                                            // Should be redacted because key 'key' is sensitive
+		{"High Entropy Secret", "api_key=sk_live_51Nc7qE...", true},                                   // Should be redacted
+		{"Random Noise", "data=8f7d9a2b3c4e5f6", true},                                                // High entropy hex
+		{"Valid Visa (Luhn)", "cc=4556737586899855", true},                                            // Valid Luhn with enough distinct digits (7 > 4)
 		{"Stress Test Leak (ccGazanojgGcOSa)", "Error: 192.168.1.5 ccGazanojgGcOSa connection", true}, // Regression test for Threshold 3.6
 	}
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pii-shield-wasi"
-version = "1.4.2"
+version = "2.1.1"
 authors = [
   { name="Aragossa" },
 ]
@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/aragossa/pii-shield"
+"Homepage" = "https://github.com/pii-shield/pii-shield"
 
 [tool.setuptools]
 packages = ["pii_shield"]

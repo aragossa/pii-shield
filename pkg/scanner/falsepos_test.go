@@ -66,13 +66,13 @@ func TestFalsePositives(t *testing.T) {
 		// Just a 16-digit random number that happens to pass Luhn (we need a valid Luhn for this test)
 		luhnValid := "4556737586899855"
 		input := fmt.Sprintf("TraceId=%s", luhnValid)
-		
+
 		output := ScanAndRedact(input)
 		// It should NOT redact because no CC context and threshold is high
 		if output != input {
 			t.Errorf("Expected plain traceId pass-through for Luhn FP, got %s", output)
 		}
-		
+
 		// But WITH context it should redact
 		inputWithCtx := fmt.Sprintf("visa card %s provided", luhnValid)
 		outputCtx := ScanAndRedact(inputWithCtx)

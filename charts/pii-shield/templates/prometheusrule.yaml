@@ -1,0 +1,73 @@
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "pii-shield.fullname" . }}
+  {{- if .Values.metrics.prometheusRule.namespace }}
+  namespace: {{ .Values.metrics.prometheusRule.namespace }}
+  {{- end }}
+  labels:
+    {{- include "pii-shield.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: pii-shield.rules
+      rules:
+        - alert: PIIShieldTargetDown
+          expr: up{job=~".*pii-shield.*"} == 0
+          for: {{ .Values.metrics.prometheusRule.targetDownFor | quote }}
+          labels:
+            severity: critical
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield metrics target is down
+            description: Prometheus cannot scrape a PII-Shield metrics target. Sanitized log flow may be unobservable.
+        - alert: PIIShieldSidecarRestarting
+          expr: increase(kube_pod_container_status_restarts_total{container="pii-shield"}[15m]) > {{ .Values.metrics.prometheusRule.restartThreshold }}
+          for: {{ .Values.metrics.prometheusRule.restartFor | quote }}
+          labels:
+            severity: warning
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield sidecar restarted
+            description: A PII-Shield sidecar restarted recently. Check pod events and sidecar logs for sanitizer failures.
+        - alert: PIIShieldErrorRateHigh
+          expr: sum(rate(piishield_errors_total[5m])) > {{ .Values.metrics.prometheusRule.errorRateThreshold }}
+          for: {{ .Values.metrics.prometheusRule.errorRateFor | quote }}
+          labels:
+            severity: warning
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield sanitizer error rate is high
+            description: PII-Shield is reporting sanitizer or parser errors. Check fail-open/fail-closed behavior and recent policy changes.
+        - alert: PIIShieldProcessingLatencyHigh
+          expr: histogram_quantile(0.95, sum(rate(piishield_processing_duration_seconds_bucket[5m])) by (le)) > {{ .Values.metrics.prometheusRule.p95LatencySeconds }}
+          for: {{ .Values.metrics.prometheusRule.latencyFor | quote }}
+          labels:
+            severity: warning
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield p95 processing latency is high
+            description: PII-Shield redaction latency exceeded the configured threshold. Check log volume, custom regex rules, and CPU limits.
+        - alert: PIIShieldNoProcessedBytes
+          expr: sum(rate(piishield_processed_bytes_total[15m])) == 0
+          for: {{ .Values.metrics.prometheusRule.noThroughputFor | quote }}
+          labels:
+            severity: warning
+            {{- with .Values.metrics.prometheusRule.alertLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: PII-Shield processed no log bytes
+            description: PII-Shield has not reported processed log bytes. Confirm protected workloads are producing logs and the sidecar is watching the expected file path.
+{{- end }}

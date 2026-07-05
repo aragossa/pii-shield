@@ -65,7 +65,8 @@ func (bs *BaselineStats) GetThreshold() (float64, bool) {
 	// Calculate stddev
 	variance := 0.0
 	for _, v := range bs.samples {
-		variance += math.Pow(v-mean, 2)
+		diff := v - mean
+		variance += diff * diff
 	}
 	stddev := math.Sqrt(variance / float64(len(bs.samples)))
 

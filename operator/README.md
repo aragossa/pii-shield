@@ -1,6 +1,6 @@
 # PII-Shield Operator
 
-The Kubernetes Operator for [PII-Shield](https://github.com/aragossa/pii-shield), providing automatic Personally Identifiable Information masking for application logs in K8s clusters using Distroless Native Sidecars.
+The Kubernetes Operator for [PII-Shield](https://github.com/pii-shield/pii-shield), providing automatic Personally Identifiable Information masking for application logs in K8s clusters using Distroless Native Sidecars.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ The easiest way to install the operator is via our official Helm chart hosted on
 
 1. Add the Helm repository:
    ```bash
-   helm repo add pii-shield https://aragossa.github.io/pii-shield
+   helm repo add pii-shield https://pii-shield.github.io/pii-shield
    helm repo update
    ```
 
@@ -40,6 +40,14 @@ Once installed, you can protect any application by applying a `PiiPolicy` and ad
      injectionMode: "file"
    ```
 
+   Supported `injectionMode` values:
+
+   | Mode | Status | Description |
+   |------|--------|-------------|
+   | `file` | Stable (default) | The sidecar tails a log file on a shared `emptyDir` volume. Recommended for production. |
+   | `pipe` | **Experimental** | Rewrites the target container command through `/bin/sh -c` to redirect output into a named pipe. Can break distroless images (no shell), argument quoting, signal handling, and the app lifecycle. The webhook returns a warning on injection. Not recommended for production. |
+   | `ebpf` | Experimental / R&D | Kernel-level interception prototype. Not production-ready. |
+
 2. **Label your Application Pods:**
    ```yaml
    apiVersion: apps/v1
@@ -61,6 +69,9 @@ The Operator will automatically inject the secure Sidecar Agent into your Pod, c
 ## Development
 
 If you want to contribute to the Operator:
+
+> [!NOTE]
+> The Kustomize and `make deploy` paths in this directory are for local development, CRD generation, and manual validation of the operator source tree. For user-facing v2.x installs, use the Helm chart.
 
 ### Prerequisites
 - Go version v1.24+
@@ -89,4 +100,3 @@ make sync-helm
 ## License
 
 Distributed under the Apache 2.0 License.
-

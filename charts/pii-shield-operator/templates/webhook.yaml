@@ -51,7 +51,7 @@ webhooks:
     {{- if not .Values.webhook.useCertManager }}
     caBundle: {{ b64enc $ca }}
     {{- end }}
-  failurePolicy: Ignore
+  failurePolicy: {{ .Values.webhook.failurePolicy }}
   name: mpod.kb.io
   namespaceSelector:
     matchLabels:

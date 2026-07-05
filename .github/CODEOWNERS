@@ -1,0 +1,24 @@
+# Default owner for repository-wide changes.
+* @aragossa
+
+# Core scanner and CLI.
+/pkg/scanner/ @aragossa
+/pkg/metrics/ @aragossa
+/cmd/ @aragossa
+
+# Kubernetes operator and deployment assets.
+/operator/ @aragossa
+/charts/ @aragossa
+
+# CI/CD and release automation.
+/.github/workflows/ @aragossa
+/.github/dependabot.yml @aragossa
+
+# SDK packages.
+/sdks/node/ @aragossa
+/sdks/python/ @aragossa
+
+# Security and readiness documentation.
+/SECURITY.md @aragossa
+/docs/threat-model.md @aragossa
+/docs/application-readiness.md @aragossa

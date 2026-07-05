@@ -7,8 +7,8 @@ OPERATOR_NAMESPACE="operator-system"
 APP_NAMESPACE="default"
 HELM_RELEASE="pii-shield-operator"
 IMAGE_TAG="e2e-test-$(date +%s)"
-OPERATOR_IMAGE="ghcr.io/aragossa/pii-shield-operator:${IMAGE_TAG}"
-AGENT_IMAGE="ghcr.io/aragossa/pii-shield-agent:${IMAGE_TAG}"
+OPERATOR_IMAGE="ghcr.io/pii-shield/pii-shield-operator:${IMAGE_TAG}"
+AGENT_IMAGE="ghcr.io/pii-shield/pii-shield-agent:${IMAGE_TAG}"
 
 echo "🚀 Starting PII-Shield Operator E2E Tests..."
 
@@ -51,9 +51,9 @@ fi
 echo "⚙️ Installing Helm Chart..."
 helm upgrade --install ${HELM_RELEASE} ../charts/pii-shield-operator \
   -n ${OPERATOR_NAMESPACE} --create-namespace \
-  --set image.repository="ghcr.io/aragossa/pii-shield-operator" \
+  --set image.repository="ghcr.io/pii-shield/pii-shield-operator" \
   --set image.tag="${IMAGE_TAG}" \
-  --set sidecar.image.repository="ghcr.io/aragossa/pii-shield-agent" \
+  --set sidecar.image.repository="ghcr.io/pii-shield/pii-shield-agent" \
   --set sidecar.image.tag="${IMAGE_TAG}" \
   --set webhook.useCertManager=false \
   --wait --timeout=120s
@@ -79,7 +79,7 @@ echo "🚀 Deploying test-job..."
 kubectl apply -f tests/test-job.yaml -n ${APP_NAMESPACE}
 
 # Wait for Job Pod to be created
-echo "⏳ Ожидание создания пода от Job..."
+echo "⏳ Waiting for the Job pod to be created..."
 while [[ $(kubectl get pods -l job-name=test-job -n ${APP_NAMESPACE} -o jsonpath='{.items}') == "[]" ]]; do
   sleep 1
 done
@@ -93,9 +93,9 @@ if ! kubectl wait --for=condition=ready pod -l job-name=test-job -n ${APP_NAMESP
   exit 1
 fi
 
-# Быстрая проверка на падение
+# Quick failure check
 if kubectl get pod -l job-name=test-job -n ${APP_NAMESPACE} -o jsonpath='{.items[0].status.phase}' | grep -q "Failed"; then
-  echo "❌ Ошибка: Pod завершился со статусом Failed"
+  echo "❌ Error: Pod finished with Failed status"
   kubectl describe pod -l job-name=test-job -n ${APP_NAMESPACE}
   exit 1
 fi
@@ -136,7 +136,7 @@ if [ "$SUCCESS_HIDDEN" = false ]; then
 fi
 
 if [ "$SUCCESS_SAFE" = false ]; then
-  echo "❌ Error: Ложное срабатывание: безопасные данные были повреждены или не найдены."
+  echo "❌ Error: False positive: safe data was modified or not found."
   echo "--- Sidecar Logs ---"
   kubectl logs -l job-name=test-job -c pii-shield-sidecar -n ${APP_NAMESPACE}
   exit 1

@@ -4,24 +4,22 @@ description: A Kubernetes Operator for automatic PII (Personally Identifiable In
 
 type: application
 
-version: 2.0.0
+version: 2.1.1
 
-appVersion: "2.0.0"
+appVersion: "2.1.1"
 
-icon: https://raw.githubusercontent.com/aragossa/pii-shield/main/docs/assets/logo.png
-
-home: https://github.com/aragossa/pii-shield
+home: https://github.com/pii-shield/pii-shield
 sources:
-  - https://github.com/aragossa/pii-shield
+  - https://github.com/pii-shield/pii-shield
 maintainers:
   - name: aragossa
-    email: admin@thelis.dev
+    email: ilya.ploskovitov@pii-shield.com
 
 annotations:
   artifacthub.io/category: security
   artifacthub.io/license: Apache-2.0
   artifacthub.io/links: |
     - name: Documentation
-      url: https://github.com/aragossa/pii-shield/tree/main/operator
+      url: https://github.com/pii-shield/pii-shield/tree/main/operator
     - name: GitHub
-      url: https://github.com/aragossa/pii-shield
+      url: https://github.com/pii-shield/pii-shield

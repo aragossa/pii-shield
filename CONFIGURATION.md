@@ -7,9 +7,12 @@ PII-Shield is configured entirely via environment variables.
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `PII_SALT` | Random byte string used for HMAC hashing. **MUST be >16 chars in production.** | **No (Recommended)** | Randomly generated on startup (but ephemeral) |
+| `PII_REQUIRE_STRONG_SALT` | Reject startup when `PII_SALT` is explicitly set to fewer than 16 bytes. Recommended for production and compliance deployments. | No | `false` |
 
 > [!WARNING]
 > If `PII_SALT` is not set, PII-Shield generates a random salt on startup. This means hashes will change every time the pod restarts, making it impossible to correlate logs across restarts. For production, **ALWAYS** set a persistent `PII_SALT`.
+
+Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail instead of only warning when a weak explicit salt is configured.
 
 ## Detection Tuning
 
@@ -17,7 +20,7 @@ PII-Shield is configured entirely via environment variables.
 |----------|-------------|---------|
 | `PII_ENTROPY_THRESHOLD` | Shannon entropy threshold (3.0 - 8.0). Higher = fewer false positives, but might miss simple passwords. | `3.6` |
 | `PII_MIN_SECRET_LENGTH` | Minimum length of a string to be considered a candidate token. | `6` |
-| `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive). | `password,secret,token,key,api_key...` |
+| `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive). | `password,secret,token,key,api_key,aws_access_key_id,aws_secret_access_key,gcp_credentials,slack_token...` |
 | `PII_SENSITIVE_KEY_PATTERNS` | Comma-separated list of regex patterns for key detection. | (empty) |
 
 ## Advanced Features
@@ -28,6 +31,14 @@ PII-Shield is configured entirely via environment variables.
 | `PII_ADAPTIVE_SAMPLES` | Number of samples to collect before activating adaptive mode. | `100` |
 | `PII_DISABLE_BIGRAM_CHECK` | Disable English bigram validation. Set to `true` for non-English logs. | `false` |
 | `PII_BIGRAM_DEFAULT_SCORE` | Log-probability score for unknown bigrams. | `-7.0` |
+
+## Runtime Failure Policy
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PII_FAIL_POLICY` | Controls behavior when line processing fails. Use `open` to keep log flow alive where possible, or `closed` to emit drop markers instead of raw lines. | `open` |
+
+See `docs/sidecar-failure-modes.md` for production failure-mode guidance.
 
 ## Value-Based Regex Redaction (Deterministic)
 

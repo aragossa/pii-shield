@@ -21,9 +21,9 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 		expectedOutput string
 	}{
 		{
-			name:           "Account Redaction (Named)",
-			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": "Account"}]`,
-			input:          "User ID: ACCT-1234567890",
+			name:        "Account Redaction (Named)",
+			regexConfig: `[{"pattern": "^ACCT-[0-9]{10}$", "name": "Account"}]`,
+			input:       "User ID: ACCT-1234567890",
 			// Expect: [HIDDEN:Account:HexHash]
 			expectedOutput: `User ID: \[HIDDEN:Account:[a-f0-9]{6}\]`,
 		},
@@ -34,9 +34,9 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 			expectedOutput: `License: \[HIDDEN:TX:[a-f0-9]{6}\]`,
 		},
 		{
-			name:           "Account Redaction (Unnamed)",
-			regexConfig:    `[{"pattern": "^ACCT-[0-9]{10}$", "name": ""}]`,
-			input:          "Transaction: ACCT-1234567890",
+			name:        "Account Redaction (Unnamed)",
+			regexConfig: `[{"pattern": "^ACCT-[0-9]{10}$", "name": ""}]`,
+			input:       "Transaction: ACCT-1234567890",
 			// Expect: [HIDDEN:HexHash] (Wait, redactWithHMAC adds extra colon if name empty? Let's check logic)
 			// Logic: if name != "" { append :name }; append :hash
 			// So if name is empty: [HIDDEN:hash]
@@ -70,7 +70,7 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tConfig := originalConfig // Copy defaults
+			tConfig := originalConfig                   // Copy defaults
 			tConfig.CustomRegexes = []CustomRegexRule{} // Reset
 
 			if tt.regexConfig != "" {
@@ -90,12 +90,12 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 			currentConfig.EntropyThreshold = 100.0
 
 			got := ScanAndRedact(tt.input)
-			
+
 			// CHANGED: Use Regex to verify output because Hash is dynamic/random if salt is random
 			// We expect [HIDDEN:Name:Hash] or [HIDDEN:Hash]
 			// The original expectedOutput in struct is just the prefix part for simplicity, OR we update the struct to be a regex.
 			// Let's treat tt.expectedOutput as a REGEX pattern now.
-			
+
 			matched, err := regexp.MatchString(tt.expectedOutput, got)
 			if err != nil {
 				t.Fatalf("Invalid regex in test case: %v", err)
@@ -106,7 +106,6 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 		})
 	}
 }
-
 
 func TestScanner_CrashOnInvalidConfig(t *testing.T) {
 	t.Skip("Skipping subprocess test to avoid hanging during current session")

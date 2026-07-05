@@ -1,15 +1,21 @@
 package webhook
 
 import (
+	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	piishieldv1alpha1 "github.com/aragossa/pii-shield/operator/api/v1alpha1"
+	piishieldv1alpha1 "github.com/pii-shield/pii-shield/operator/api/v1alpha1"
 )
 
 func TestInjectFileMode(t *testing.T) {
@@ -146,4 +152,81 @@ func TestInjectPipeMode(t *testing.T) {
 	assert.Len(t, mutated.Spec.Containers, 2)
 	sidecar := mutated.Spec.Containers[1]
 	assert.Equal(t, "pii-shield-sidecar", sidecar.Name)
+}
+
+func TestHandlePipeModeReturnsExperimentalWarning(t *testing.T) {
+	scheme := runtime.NewScheme()
+	assert.NoError(t, corev1.AddToScheme(scheme))
+	assert.NoError(t, piishieldv1alpha1.AddToScheme(scheme))
+
+	policy := &piishieldv1alpha1.PiiPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "default", Namespace: "test-ns"},
+		Spec:       piishieldv1alpha1.PiiPolicySpec{InjectionMode: "pipe"},
+	}
+	mutator := &PodMutator{
+		Client:            fake.NewClientBuilder().WithScheme(scheme).WithObjects(policy).Build(),
+		Decoder:           admission.NewDecoder(scheme),
+		LegacySidecarMode: true,
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "app",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"pii-shield.io/inject": "true"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "app", Command: []string{"node", "app.js"}}},
+		},
+	}
+	raw, err := json.Marshal(pod)
+	assert.NoError(t, err)
+
+	resp := mutator.Handle(context.Background(), admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Namespace: "test-ns",
+			Object:    runtime.RawExtension{Raw: raw},
+		},
+	})
+	assert.True(t, resp.Allowed)
+	assert.NotEmpty(t, resp.Patches)
+	assert.Len(t, resp.Warnings, 1)
+	assert.Contains(t, resp.Warnings[0], "experimental")
+	assert.Contains(t, resp.Warnings[0], "/bin/sh -c")
+}
+
+func TestBuildSidecarPassesScannerEnv(t *testing.T) {
+	policy := &piishieldv1alpha1.PiiPolicy{
+		Spec: piishieldv1alpha1.PiiPolicySpec{
+			FailPolicy:           "closed",
+			ConfidenceThreshold:  0.8,
+			Salt:                 "0123456789abcdef",
+			EntropyThreshold:     4.5,
+			MinSecretLength:      12,
+			SensitiveKeys:        []string{"token", "secret"},
+			SensitiveKeyPatterns: []string{"^x_api_.*"},
+			CustomRegexList:      []piishieldv1alpha1.RegexRule{{Name: "ticket", Pattern: "T-[0-9]+"}},
+			SafeRegexList:        []piishieldv1alpha1.RegexRule{{Name: "build", Pattern: "B-[0-9]+"}},
+		},
+	}
+	sidecar := (&PodMutator{}).buildSidecar("file", policy, "/shared/app.log")
+
+	got := map[string]string{}
+	for _, e := range sidecar.Env {
+		got[e.Name] = e.Value
+	}
+	assert.Equal(t, "0123456789abcdef", got["PII_SALT"])
+	assert.Equal(t, "closed", got["PII_FAIL_POLICY"])
+	assert.Equal(t, "0.8", got["PII_CONFIDENCE_THRESHOLD"])
+	assert.Equal(t, "4.5", got["PII_ENTROPY_THRESHOLD"])
+	assert.Equal(t, "12", got["PII_MIN_SECRET_LENGTH"])
+	assert.Equal(t, "token,secret", got["PII_SENSITIVE_KEYS"])
+	assert.Equal(t, "^x_api_.*", got["PII_SENSITIVE_KEY_PATTERNS"])
+	assert.JSONEq(t, `[{"name":"ticket","pattern":"T-[0-9]+"}]`, got["PII_CUSTOM_REGEX_LIST"])
+	assert.JSONEq(t, `[{"name":"build","pattern":"B-[0-9]+"}]`, got["PII_SAFE_REGEX_LIST"])
+}
+
+func TestBuildSidecarEmptyPolicyHasNoScannerEnv(t *testing.T) {
+	sidecar := (&PodMutator{}).buildSidecar("file", &piishieldv1alpha1.PiiPolicy{}, "/shared/app.log")
+	assert.Empty(t, sidecar.Env)
 }

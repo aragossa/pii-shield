@@ -1,0 +1,53 @@
+name: Fetch GitHub Traffic Stats
+
+on:
+  schedule:
+    - cron: '30 4 * * *'   # 04:30 UTC = 07:30 GMT+3
+  workflow_dispatch: {}
+
+jobs:
+  fetch-traffic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private stats repo
+        uses: actions/checkout@v4
+        with:
+          repository: pii-shield/pii-shield-stats-private
+          token: ${{ secrets.GH_TRAFFIC_TOKEN }}
+          path: stats-repo
+
+      - name: Fetch traffic data
+        env:
+          GH_TOKEN: ${{ secrets.GH_TRAFFIC_TOKEN }}
+        run: |
+          mkdir -p stats-repo/data
+          curl -sS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/pii-shield/pii-shield/traffic/views \
+            > stats-repo/data/traffic_views.json
+          curl -sS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/pii-shield/pii-shield/traffic/clones \
+            > stats-repo/data/traffic_clones.json
+          curl -sS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/pii-shield/pii-shield/traffic/popular/paths \
+            > stats-repo/data/traffic_popular_paths.json
+          curl -sS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/pii-shield/pii-shield/traffic/popular/referrers \
+            > stats-repo/data/traffic_popular_referrers.json
+      
+      - name: Fetch stars count
+        env:
+          GH_TOKEN: ${{ secrets.GH_TRAFFIC_TOKEN }}
+        run: |
+          curl -sS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/pii-shield/pii-shield \
+            | jq -c '{stargazers_count, date: (now | gmtime | strftime("%Y-%m-%d"))}' \
+            >> stats-repo/data/stars_history.jsonl
+
+      - name: Commit and push to private repo
+        working-directory: stats-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "chore: update traffic stats $(date -u +%Y-%m-%d)"
+          git push

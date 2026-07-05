@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/aragossa/pii-shield-operator
+  repository: ghcr.io/pii-shield/pii-shield-operator
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
@@ -55,13 +55,32 @@ webhook:
   # If true, uses cert-manager to generate and manage certificates.
   # If false, Helm will generate self-signed certificates during installation.
   useCertManager: true
+  # Admission failure behavior. Use Ignore for availability-first rollout, Fail for compliance-sensitive enforcement.
+  failurePolicy: Ignore
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
 
 # Advanced Configuration for the PII-Shield Agent injected into Pods
 sidecar:
   image:
-    repository: ghcr.io/aragossa/pii-shield-agent
+    repository: ghcr.io/pii-shield/pii-shield-agent
     tag: ""
   # fsGroup to inject into the mutated pod if none is specified
   fsGroup: 65532
   # If true, injects the sidecar into 'containers' instead of 'initContainers'
   legacySidecarMode: false
+
+# Observability Configuration
+metrics:
+  prometheusRule:
+    enabled: false
+    # namespace: monitoring
+    labels: {}
+    alertLabels: {}
+    operatorDownFor: 5m
+    webhookEndpointFor: 5m
+    certExpiresSoonSeconds: 604800
+    certExpiresSoonFor: 30m
+    injectionEventFor: 5m

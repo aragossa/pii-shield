@@ -14,8 +14,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/aragossa/pii-shield/pkg/metrics"
-	"github.com/aragossa/pii-shield/pkg/scanner"
+	"github.com/pii-shield/pii-shield/pkg/metrics"
+	"github.com/pii-shield/pii-shield/pkg/scanner"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 		if port == "" {
 			port = "9090"
 		}
-		
+
 		// Wire metrics callback
 		scanner.RedactionCallback = metrics.IncrementRedaction
 
@@ -40,7 +40,7 @@ func main() {
 
 	failPolicy := os.Getenv("PII_FAIL_POLICY")
 	if failPolicy == "" {
-		failPolicy = "open" // Start with fail-open by default 
+		failPolicy = "open" // Start with fail-open by default
 	}
 
 	var watchFile string
@@ -67,32 +67,18 @@ func main() {
 			}
 		}
 
-		// Pipe injection mode points --watch-file at a named pipe (FIFO). The
-		// tail library does not stay attached to a FIFO: it hits EOF, closes its
-		// Lines channel and we exit, which crash-loops the native sidecar so the
-		// pod never becomes Ready. Read the FIFO directly instead — each open
-		// blocks until a writer appears and read returns EOF when all writers
-		// close, so reopening in a loop keeps the agent alive across writers.
-		if info, err := os.Stat(watchFile); err == nil && info.Mode()&os.ModeNamedPipe != 0 {
+		// A FIFO (pipe injection mode) cannot be followed with tail: the tail
+		// library targets regular growing files and closes its Lines channel as
+		// soon as it hits EOF on the empty pipe, so the sidecar exits and
+		// crash-loops before any writer connects (the pod never becomes Ready).
+		// Read the named pipe directly instead.
+		if isNamedPipe(watchFile) {
 			go func() {
 				<-sigChan
 				os.Exit(0)
 			}()
-			for {
-				f, err := os.Open(watchFile) // blocks until a writer opens the FIFO
-				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error opening pipe:", err)
-					time.Sleep(500 * time.Millisecond)
-					continue
-				}
-				scan := bufio.NewScanner(f)
-				buf := make([]byte, 1024*1024)
-				scan.Buffer(buf, 10*1024*1024)
-				for scan.Scan() {
-					processLine(scan.Text(), metricsEnabled, failPolicy)
-				}
-				f.Close()
-			}
+			readFIFO(watchFile, metricsEnabled, failPolicy)
+			return
 		}
 
 		t, err := tail.TailFile(watchFile, tail.Config{
@@ -107,7 +93,9 @@ func main() {
 
 		go func() {
 			<-sigChan
-			t.Stop()
+			if err := t.Stop(); err != nil {
+				log.Printf("Failed to stop tail: %v", err)
+			}
 		}()
 
 		for line := range t.Lines {
@@ -148,6 +136,62 @@ func main() {
 	}
 }
 
+// isNamedPipe reports whether path is a FIFO (pipe injection mode), as opposed
+// to a regular file (file injection mode).
+func isNamedPipe(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Mode()&os.ModeNamedPipe != 0
+}
+
+// readFIFO continuously sanitizes lines read from a named pipe. Opening the FIFO
+// read-only blocks until a writer connects, which keeps the sidecar running so
+// the pod reaches Ready. When the writer closes the pipe (EOF) the FIFO is
+// reopened to block for the next writer; the loop ends only on SIGTERM/SIGINT
+// (handled by the os.Exit goroutine installed by the caller).
+func readFIFO(path string, metricsEnabled bool, failPolicy string) {
+	for {
+		if err := streamPipeOnce(path, metricsEnabled, failPolicy); err != nil {
+			log.Fatalf("Failed to open pipe %s: %v", path, err)
+		}
+		// Writer closed the pipe; loop to reopen and block for the next writer.
+	}
+}
+
+// streamPipeOnce opens the FIFO (blocking until a writer connects), sanitizes
+// every line until the writer closes the pipe (EOF), then returns. It returns a
+// non-nil error only if the pipe could not be opened.
+func streamPipeOnce(path string, metricsEnabled bool, failPolicy string) error {
+	f, err := os.OpenFile(path, os.O_RDONLY, os.ModeNamedPipe)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	sc := bufio.NewScanner(f)
+	buf := make([]byte, 1024*1024)
+	sc.Buffer(buf, 10*1024*1024)
+
+	for sc.Scan() {
+		processLine(sc.Text(), metricsEnabled, failPolicy)
+	}
+
+	if err := sc.Err(); err != nil {
+		if metricsEnabled {
+			metrics.ErrorsTotal.Inc()
+		}
+		if err == bufio.ErrTooLong {
+			if failPolicy == "closed" {
+				fmt.Println("[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
+			} else {
+				fmt.Println("[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
+			}
+		}
+		fmt.Fprintln(os.Stderr, "Error reading pipe:", err)
+	}
+
+	return nil
+}
+
 func processLine(text string, metricsEnabled bool, failPolicy string) {
 	// Functional wrapper to catch panics per-line
 	func() {
@@ -160,7 +204,7 @@ func processLine(text string, metricsEnabled bool, failPolicy string) {
 				if failPolicy == "closed" {
 					fmt.Println("[PII_SHIELD_DROP: FATAL_ERROR]")
 				} else {
-					// Fail-Open: keep the flow alive 
+					// Fail-Open: keep the flow alive
 					fmt.Println(text)
 				}
 			}

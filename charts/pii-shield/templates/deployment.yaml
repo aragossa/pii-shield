@@ -29,42 +29,42 @@ spec:
         - name: app-logs
           emptyDir: {}
       containers:
-        # 1. Log Generator (App Container)
+        {{- if .Values.demo.enabled }}
+        # Demo-only log generator. Production installs should provide their own
+        # app container writing to .Values.watchFile on the shared volume.
         - name: log-generator
-          image: "{{ .Values.generatorImage.repository }}:{{ .Values.generatorImage.tag }}"
-          imagePullPolicy: {{ .Values.generatorImage.pullPolicy }}
+          image: "{{ .Values.demo.generatorImage.repository }}:{{ .Values.demo.generatorImage.tag }}"
+          imagePullPolicy: {{ .Values.demo.generatorImage.pullPolicy }}
           command:
             - /bin/sh
             - -c
             - |
               echo "Starting App Simulator..."
+              touch {{ .Values.watchFile | quote }}
               while true; do
                 # Generate a mix of normal logs and logs with sensitive data
-                echo "[INFO] Processing user request from IP: 192.168.1.1" >> /var/log/app/output.log
-                echo "[DEBUG] Database connection established to userdb.internal" >> /var/log/app/output.log
-                echo "[WARN] Auth failed for user user@example.com, token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." >> /var/log/app/output.log
-                echo "[INFO] Order created successfully. TX-ID: TX-12345, CC: 4111 2222 3333 4444" >> /var/log/app/output.log
-                echo "----" >> /var/log/app/output.log
+                echo "[INFO] Processing user request from IP: 192.168.1.1" >> {{ .Values.watchFile | quote }}
+                echo "[DEBUG] Database connection established to userdb.internal" >> {{ .Values.watchFile | quote }}
+                echo "[WARN] Auth failed for user user@example.com, token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." >> {{ .Values.watchFile | quote }}
+                echo "[INFO] Order created successfully. TX-ID: TX-12345, CC: 4111 2222 3333 4444" >> {{ .Values.watchFile | quote }}
+                echo "----" >> {{ .Values.watchFile | quote }}
                 sleep 2
               done
           volumeMounts:
             - name: app-logs
               mountPath: /var/log/app
+        {{- end }}
 
-        # 2. PII-Shield (Sidecar Container)
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # The image is built FROM scratch and has no shell, so drive the
-          # binary directly. --watch-file waits for the file to appear and then
-          # follows it (equivalent to tail -F), tracking rotation/recreation.
           command:
             - /pii-shield
           args:
             - --watch-file
-            - /var/log/app/output.log
+            - {{ .Values.watchFile | quote }}
           {{- if .Values.metrics.enabled }}
           ports:
             - name: http-metrics
@@ -76,6 +76,8 @@ spec:
             - name: PII_SALT
               value: {{ .Values.piiConfig.salt | quote }}
             {{- end }}
+            - name: PII_REQUIRE_STRONG_SALT
+              value: {{ .Values.piiConfig.requireStrongSalt | quote }}
             - name: PII_ENTROPY_THRESHOLD
               value: {{ .Values.piiConfig.entropyThreshold | quote }}
             - name: PII_MIN_SECRET_LENGTH
@@ -84,6 +86,8 @@ spec:
               value: {{ .Values.piiConfig.sensitiveKeys | quote }}
             - name: PII_ADAPTIVE_THRESHOLD
               value: {{ .Values.piiConfig.adaptiveThreshold | quote }}
+            - name: PII_FAIL_POLICY
+              value: {{ .Values.piiConfig.failPolicy | quote }}
             {{- if .Values.piiConfig.customRegexList }}
             - name: PII_CUSTOM_REGEX_LIST
               value: {{ .Values.piiConfig.customRegexList | quote }}

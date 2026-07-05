@@ -6,29 +6,67 @@ on:
   pull_request:
     branches: [ main, dev ]
 
+permissions:
+  contents: read
+
 jobs:
+  version-consistency:
+    name: Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+    - name: Verify version files match VERSION
+      run: scripts/set-version.sh --check
+
   test:
     name: Test, Lint & Fuzz
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
       with:
         go-version-file: 'go.mod'
+
+    - name: Set up Helm
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3
+      with:
+        platforms: amd64,arm64
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
 
     - name: Verify Dependencies
       run: go mod verify
 
-    - name: Static Analysis (Vet)
-      run: go vet ./...
+    - name: Run actionlint
+      uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee
+      with:
+        version: v2.12.2
+        only-new-issues: true
 
     - name: Run Fuzz Checks (Sanity)
       run: go test -fuzz=FuzzScanner -fuzztime=15s ./pkg/scanner
 
     - name: Run Tests (Race & Coverage)
       run: go test -race -coverprofile=coverage.out ./...
+
+    - name: Run Operator Tests
+      working-directory: operator
+      run: go test -v -race -coverprofile=cover.out ./...
+
+    - name: Verify Helm Runtime
+      run: scripts/verify-helm-runtime.sh
+
+    - name: Verify multi-arch agent image build
+      run: scripts/verify-agent-multiarch-build.sh
 
     - name: Check Coverage Threshold
       run: |
@@ -45,8 +83,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
       with:
         go-version-file: 'go.mod'
     - name: Run Benchmarks

@@ -1,0 +1,12 @@
+version: '2'
+
+formatters:
+  enable:
+    - gofmt
+linters:
+  default: standard
+  exclusions:
+    rules:
+      - path: '(.+)_test\.go'
+        linters:
+          - errcheck

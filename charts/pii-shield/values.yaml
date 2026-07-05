@@ -6,12 +6,16 @@ image:
   # 2.1.0+ ships the scratch-based binary driven via `--watch-file` (see the
   # deployment template). Older tags (e.g. v1.2.3) predate that flag and won't
   # work with this chart.
-  tag: "2.1.0"
+  tag: "2.1.1"
 
-generatorImage:
-  repository: alpine
-  pullPolicy: IfNotPresent
-  tag: "latest"
+watchFile: /var/log/app/output.log
+
+demo:
+  enabled: false
+  generatorImage:
+    repository: alpine
+    pullPolicy: IfNotPresent
+    tag: "latest"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -52,6 +56,9 @@ resources:
 piiConfig:
   # PII_SALT: Random byte string used for HMAC hashing. Recommended to set for persistent hashes.
   salt: ""
+
+  # PII_REQUIRE_STRONG_SALT: Reject explicitly configured salts shorter than 16 bytes
+  requireStrongSalt: "false"
   
   # Configuration tuning
   # PII_ENTROPY_THRESHOLD: Shannon entropy threshold (3.0 - 8.0)
@@ -65,6 +72,9 @@ piiConfig:
   
   # PII_ADAPTIVE_THRESHOLD: Enable statistical learning
   adaptiveThreshold: "false"
+
+  # PII_FAIL_POLICY: open keeps log flow alive on processing failure; closed emits drop markers
+  failPolicy: "open"
 
   # PII_CUSTOM_REGEX_LIST: JSON array of regex objects to enforce redaction
   # Example: '[{"pattern": "^TX-\\d{5}$", "name": "TX"}]'
@@ -88,6 +98,19 @@ metrics:
     # namespace: monitoring
     # labels:
     #   release: prometheus
+  prometheusRule:
+    enabled: false
+    # namespace: monitoring
+    labels: {}
+    alertLabels: {}
+    targetDownFor: 5m
+    restartThreshold: 0
+    restartFor: 5m
+    errorRateThreshold: 0
+    errorRateFor: 10m
+    p95LatencySeconds: 0.05
+    latencyFor: 10m
+    noThroughputFor: 30m
 
 # Operator configuration
 legacySidecarMode: false
