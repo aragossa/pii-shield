@@ -77,7 +77,12 @@ func (m *PodMutator) Handle(ctx context.Context, req admission.Request) admissio
 	if err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
-	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
+	resp := admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
+	if mode == "pipe" {
+		resp.Warnings = append(resp.Warnings,
+			"PiiPolicy injectionMode \"pipe\" is experimental: it rewrites the target container command through /bin/sh -c and can break distroless images, argument quoting, signal handling, and the app lifecycle")
+	}
+	return resp
 }
 
 func (m *PodMutator) getTargetContainerIndex(pod *corev1.Pod, targetName string) int {
