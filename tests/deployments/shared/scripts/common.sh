@@ -256,8 +256,17 @@ load_image_into_current_local_cluster() {
 build_replay_image() {
   local repo_root="$1"
   local image="${REPLAY_IMAGE:-pii-shield-access-log-replay:manual}"
-  require_access_log_fixture "${repo_root}" >/dev/null
-  docker build -f "${repo_root}/tests/deployments/shared/replay-image/Dockerfile" -t "${image}" "${repo_root}"
+  local fixture
+  fixture="$(require_access_log_fixture "${repo_root}")"
+  # Stage the build context so the Dockerfile COPYs the resolved fixture
+  # (PII_SHIELD_ACCESS_LOG included) instead of a hardcoded repo path, and
+  # the docker daemon does not receive the whole repo as context.
+  local context
+  context="$(mktemp -d)"
+  cp "${repo_root}/tests/deployments/shared/replay-image/replay-entrypoint.sh" "${context}/replay-entrypoint.sh"
+  cp "${fixture}" "${context}/access.log"
+  docker build -f "${repo_root}/tests/deployments/shared/replay-image/Dockerfile" -t "${image}" "${context}"
+  rm -rf "${context}"
   echo "built ${image}"
 }
 

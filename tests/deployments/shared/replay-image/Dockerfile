@@ -1,7 +1,10 @@
 FROM busybox:1.36
 
-COPY tests/deployments/shared/replay-image/replay-entrypoint.sh /usr/local/bin/replay-entrypoint.sh
-COPY notes/log_example/access.log /fixtures/access.log
+# Built from a staging context prepared by build_replay_image (common.sh):
+# it contains replay-entrypoint.sh and the resolved access.log fixture
+# (honoring PII_SHIELD_ACCESS_LOG), so no repo paths are referenced here.
+COPY replay-entrypoint.sh /usr/local/bin/replay-entrypoint.sh
+COPY access.log /fixtures/access.log
 
 RUN chmod +x /usr/local/bin/replay-entrypoint.sh
 
