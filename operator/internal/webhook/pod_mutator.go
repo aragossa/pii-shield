@@ -286,6 +286,7 @@ func (m *PodMutator) buildSidecar(mode string, policy *piishieldv1alpha1.PiiPoli
 			AllowPrivilegeEscalation: ptr.To(false),
 		},
 		Resources: policy.Spec.Resources,
+		Env:       scannerEnv(policy),
 	}
 
 	if mode == "file" {
@@ -295,6 +296,49 @@ func (m *PodMutator) buildSidecar(mode string, policy *piishieldv1alpha1.PiiPoli
 	}
 
 	return sidecar
+}
+
+// scannerEnv translates PiiPolicy scanner settings into the PII_* environment
+// variables read by the sidecar agent (cmd/cleaner) and pkg/scanner.
+func scannerEnv(policy *piishieldv1alpha1.PiiPolicy) []corev1.EnvVar {
+	spec := policy.Spec
+	var env []corev1.EnvVar
+	add := func(name, value string) {
+		if value != "" {
+			env = append(env, corev1.EnvVar{Name: name, Value: value})
+		}
+	}
+
+	add("PII_SALT", spec.Salt)
+	add("PII_FAIL_POLICY", spec.FailPolicy)
+	if spec.ConfidenceThreshold != 0 {
+		add("PII_CONFIDENCE_THRESHOLD", strconv.FormatFloat(float64(spec.ConfidenceThreshold), 'f', -1, 32))
+	}
+	if spec.EntropyThreshold != 0 {
+		add("PII_ENTROPY_THRESHOLD", strconv.FormatFloat(float64(spec.EntropyThreshold), 'f', -1, 32))
+	}
+	if spec.MinSecretLength > 0 {
+		add("PII_MIN_SECRET_LENGTH", strconv.Itoa(spec.MinSecretLength))
+	}
+	add("PII_SENSITIVE_KEYS", strings.Join(spec.SensitiveKeys, ","))
+	add("PII_SENSITIVE_KEY_PATTERNS", strings.Join(spec.SensitiveKeyPatterns, ","))
+	add("PII_CUSTOM_REGEX_LIST", marshalRegexRules(spec.CustomRegexList))
+	add("PII_SAFE_REGEX_LIST", marshalRegexRules(spec.SafeRegexList))
+
+	return env
+}
+
+// marshalRegexRules serializes policy regex rules into the JSON format of the
+// scanner's CustomRegexConfig ({"pattern": ..., "name": ...}).
+func marshalRegexRules(rules []piishieldv1alpha1.RegexRule) string {
+	if len(rules) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(rules)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func (m *PodMutator) addSidecar(pod *corev1.Pod, sidecar corev1.Container) {
