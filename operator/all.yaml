@@ -48,10 +48,43 @@ spec:
             description: spec defines the desired state of PiiPolicy
             properties:
               confidenceThreshold:
-                description: ConfidenceThreshold is the threshold for PII scanner
+                description: |-
+                  ConfidenceThreshold is the threshold for the PII scanner.
+                  Exported to the sidecar as PII_CONFIDENCE_THRESHOLD.
+                type: number
+              customRegexList:
+                description: |-
+                  CustomRegexList adds redaction rules on top of the built-in detectors.
+                  Exported to the sidecar as JSON in PII_CUSTOM_REGEX_LIST.
+                items:
+                  description: RegexRule is a named regular expression passed to the
+                    scanner.
+                  properties:
+                    name:
+                      description: Name identifies the rule in redaction output and
+                        metrics
+                      type: string
+                    pattern:
+                      description: Pattern is an RE2 regular expression
+                      minLength: 1
+                      type: string
+                  required:
+                  - pattern
+                  type: object
+                type: array
+              entropyThreshold:
+                description: |-
+                  EntropyThreshold overrides the scanner entropy threshold.
+                  Exported to the sidecar as PII_ENTROPY_THRESHOLD.
                 type: number
               failPolicy:
-                description: FailPolicy determines the behavior on failure
+                description: |-
+                  FailPolicy determines the sidecar behavior when sanitization fails:
+                  "open" passes the raw line through (default), "closed" drops it.
+                  Exported to the sidecar as PII_FAIL_POLICY.
+                enum:
+                - open
+                - closed
                 type: string
               injectionMode:
                 description: |-
@@ -69,6 +102,12 @@ spec:
                 description: LogPath is the path where the application writes logs
                   (for "file" mode)
                 type: string
+              minSecretLength:
+                description: |-
+                  MinSecretLength is the minimum token length considered a secret.
+                  Exported to the sidecar as PII_MIN_SECRET_LENGTH.
+                minimum: 1
+                type: integer
               originalCommand:
                 description: |-
                   OriginalCommand is the original app command (for the experimental
@@ -134,6 +173,46 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
+              safeRegexList:
+                description: |-
+                  SafeRegexList whitelists matches that must never be redacted.
+                  Exported to the sidecar as JSON in PII_SAFE_REGEX_LIST.
+                items:
+                  description: RegexRule is a named regular expression passed to the
+                    scanner.
+                  properties:
+                    name:
+                      description: Name identifies the rule in redaction output and
+                        metrics
+                      type: string
+                    pattern:
+                      description: Pattern is an RE2 regular expression
+                      minLength: 1
+                      type: string
+                  required:
+                  - pattern
+                  type: object
+                type: array
+              salt:
+                description: |-
+                  Salt is the deterministic hashing salt, exported to the sidecar as
+                  PII_SALT. Use at least 16 characters. Plaintext in the policy object;
+                  prefer a Secret reference once available (GH-46 follow-up).
+                type: string
+              sensitiveKeyPatterns:
+                description: |-
+                  SensitiveKeyPatterns are case-insensitive regexes matched against keys.
+                  Exported to the sidecar as comma-separated PII_SENSITIVE_KEY_PATTERNS.
+                items:
+                  type: string
+                type: array
+              sensitiveKeys:
+                description: |-
+                  SensitiveKeys replaces the scanner's default sensitive key list.
+                  Exported to the sidecar as comma-separated PII_SENSITIVE_KEYS.
+                items:
+                  type: string
+                type: array
             required:
             - injectionMode
             type: object

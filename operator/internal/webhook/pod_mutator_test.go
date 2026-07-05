@@ -194,3 +194,39 @@ func TestHandlePipeModeReturnsExperimentalWarning(t *testing.T) {
 	assert.Contains(t, resp.Warnings[0], "experimental")
 	assert.Contains(t, resp.Warnings[0], "/bin/sh -c")
 }
+
+func TestBuildSidecarPassesScannerEnv(t *testing.T) {
+	policy := &piishieldv1alpha1.PiiPolicy{
+		Spec: piishieldv1alpha1.PiiPolicySpec{
+			FailPolicy:           "closed",
+			ConfidenceThreshold:  0.8,
+			Salt:                 "0123456789abcdef",
+			EntropyThreshold:     4.5,
+			MinSecretLength:      12,
+			SensitiveKeys:        []string{"token", "secret"},
+			SensitiveKeyPatterns: []string{"^x_api_.*"},
+			CustomRegexList:      []piishieldv1alpha1.RegexRule{{Name: "ticket", Pattern: "T-[0-9]+"}},
+			SafeRegexList:        []piishieldv1alpha1.RegexRule{{Name: "build", Pattern: "B-[0-9]+"}},
+		},
+	}
+	sidecar := (&PodMutator{}).buildSidecar("file", policy, "/shared/app.log")
+
+	got := map[string]string{}
+	for _, e := range sidecar.Env {
+		got[e.Name] = e.Value
+	}
+	assert.Equal(t, "0123456789abcdef", got["PII_SALT"])
+	assert.Equal(t, "closed", got["PII_FAIL_POLICY"])
+	assert.Equal(t, "0.8", got["PII_CONFIDENCE_THRESHOLD"])
+	assert.Equal(t, "4.5", got["PII_ENTROPY_THRESHOLD"])
+	assert.Equal(t, "12", got["PII_MIN_SECRET_LENGTH"])
+	assert.Equal(t, "token,secret", got["PII_SENSITIVE_KEYS"])
+	assert.Equal(t, "^x_api_.*", got["PII_SENSITIVE_KEY_PATTERNS"])
+	assert.JSONEq(t, `[{"name":"ticket","pattern":"T-[0-9]+"}]`, got["PII_CUSTOM_REGEX_LIST"])
+	assert.JSONEq(t, `[{"name":"build","pattern":"B-[0-9]+"}]`, got["PII_SAFE_REGEX_LIST"])
+}
+
+func TestBuildSidecarEmptyPolicyHasNoScannerEnv(t *testing.T) {
+	sidecar := (&PodMutator{}).buildSidecar("file", &piishieldv1alpha1.PiiPolicy{}, "/shared/app.log")
+	assert.Empty(t, sidecar.Env)
+}
