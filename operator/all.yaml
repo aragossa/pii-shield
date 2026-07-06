@@ -196,9 +196,37 @@ spec:
               salt:
                 description: |-
                   Salt is the deterministic hashing salt, exported to the sidecar as
-                  PII_SALT. Use at least 16 characters. Plaintext in the policy object;
-                  prefer a Secret reference once available (GH-46 follow-up).
+                  PII_SALT. Use at least 16 characters. The value is stored in plain
+                  text in the policy object — prefer SaltSecretKeyRef in production.
                 type: string
+              saltSecretKeyRef:
+                description: |-
+                  SaltSecretKeyRef references a key in a Secret that holds the
+                  deterministic hashing salt. Takes precedence over Salt. The Secret is
+                  resolved in the namespace of each injected pod, and the sidecar
+                  receives it as PII_SALT via a secretKeyRef, so the value never appears
+                  in the PiiPolicy object or the mutated pod spec.
+                properties:
+                  key:
+                    description: The key of the secret to select from.  Must be a
+                      valid secret key.
+                    type: string
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  optional:
+                    description: Specify whether the Secret or its key must be defined
+                    type: boolean
+                required:
+                - key
+                type: object
+                x-kubernetes-map-type: atomic
               sensitiveKeyPatterns:
                 description: |-
                   SensitiveKeyPatterns are case-insensitive regexes matched against keys.

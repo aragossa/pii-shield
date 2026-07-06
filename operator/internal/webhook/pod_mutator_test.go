@@ -230,3 +230,49 @@ func TestBuildSidecarEmptyPolicyHasNoScannerEnv(t *testing.T) {
 	sidecar := (&PodMutator{}).buildSidecar("file", &piishieldv1alpha1.PiiPolicy{}, "/shared/app.log")
 	assert.Empty(t, sidecar.Env)
 }
+
+func TestScannerEnvSaltPrecedence(t *testing.T) {
+	secretRef := &corev1.SecretKeySelector{
+		LocalObjectReference: corev1.LocalObjectReference{Name: "pii-salt"},
+		Key:                  "hashing-salt",
+	}
+
+	t.Run("policy secret ref wins over plaintext salt", func(t *testing.T) {
+		env := scannerEnv(&piishieldv1alpha1.PiiPolicy{Spec: piishieldv1alpha1.PiiPolicySpec{
+			Salt:             "plaintext-salt-16chars",
+			SaltSecretKeyRef: secretRef,
+		}})
+		assert.Len(t, env, 1)
+		assert.Equal(t, "PII_SALT", env[0].Name)
+		assert.Empty(t, env[0].Value)
+		assert.Equal(t, "pii-salt", env[0].ValueFrom.SecretKeyRef.Name)
+		assert.Equal(t, "hashing-salt", env[0].ValueFrom.SecretKeyRef.Key)
+	})
+
+	t.Run("plaintext salt wins over operator default", func(t *testing.T) {
+		t.Setenv("AGENT_SALT_SECRET_NAME", "cluster-salt")
+		env := scannerEnv(&piishieldv1alpha1.PiiPolicy{Spec: piishieldv1alpha1.PiiPolicySpec{
+			Salt: "plaintext-salt-16chars",
+		}})
+		assert.Len(t, env, 1)
+		assert.Equal(t, "plaintext-salt-16chars", env[0].Value)
+		assert.Nil(t, env[0].ValueFrom)
+	})
+
+	t.Run("operator default secret used when policy is silent", func(t *testing.T) {
+		t.Setenv("AGENT_SALT_SECRET_NAME", "cluster-salt")
+		env := scannerEnv(&piishieldv1alpha1.PiiPolicy{})
+		assert.Len(t, env, 1)
+		assert.Equal(t, "PII_SALT", env[0].Name)
+		assert.Equal(t, "cluster-salt", env[0].ValueFrom.SecretKeyRef.Name)
+		assert.Equal(t, "salt", env[0].ValueFrom.SecretKeyRef.Key)
+	})
+
+	t.Run("operator default respects custom key", func(t *testing.T) {
+		t.Setenv("AGENT_SALT_SECRET_NAME", "cluster-salt")
+		t.Setenv("AGENT_SALT_SECRET_KEY", "custom-key")
+		env := scannerEnv(&piishieldv1alpha1.PiiPolicy{})
+		assert.Len(t, env, 1)
+		assert.Equal(t, "custom-key", env[0].ValueFrom.SecretKeyRef.Key)
+	})
+}
