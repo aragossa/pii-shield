@@ -43,7 +43,7 @@ func main() {
 			}()
 		}
 	}
-	stopMetrics := func() { shutdownMetricsServer(metricsSrv) }
+	stopMetrics := func() { shutdownMetricsServer(metricsSrv, metricsShutdownGrace) }
 
 	failPolicy := os.Getenv("PII_FAIL_POLICY")
 	if failPolicy == "" {
@@ -149,7 +149,10 @@ func main() {
 	}
 }
 
-const defaultMetricsPort = "9090"
+const (
+	defaultMetricsPort   = "9090"
+	metricsShutdownGrace = 3 * time.Second
+)
 
 // resolveMetricsPort validates the PII_METRICS_PORT value, falling back to the
 // default when unset.
@@ -186,11 +189,11 @@ func newMetricsServer(port string) *http.Server {
 
 // shutdownMetricsServer drains in-flight scrapes before the process exits; a
 // scrape hanging past the grace period must not block sidecar termination.
-func shutdownMetricsServer(srv *http.Server) {
+func shutdownMetricsServer(srv *http.Server, grace time.Duration) {
 	if srv == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), grace)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("Metrics server shutdown: %v", err)

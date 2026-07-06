@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -474,6 +476,233 @@ func TestMainMetricsSigterm(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		_ = cmd.Process.Kill()
 		t.Fatal("sidecar did not exit within 10s of SIGTERM")
+	}
+}
+
+// lockedBuffer lets tests capture concurrent log output without data races.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (lb *lockedBuffer) Write(p []byte) (int, error) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	return lb.b.Write(p)
+}
+
+func (lb *lockedBuffer) String() string {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	return lb.b.String()
+}
+
+// TestMainMetricsListenFailure covers the listen-failure branch: when the
+// metrics port is already taken, the sidecar logs the failure and keeps
+// sanitizing the stream instead of exiting.
+func TestMainMetricsListenFailure(t *testing.T) {
+	// Occupy a wildcard-address port so the metrics server's ":"+port bind
+	// fails with EADDRINUSE (a loopback-only listener would not conflict with
+	// a wildcard bind on some platforms).
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("failed to occupy a port: %v", err)
+	}
+	defer l.Close()
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to parse occupied address: %v", err)
+	}
+
+	t.Setenv("PII_METRICS_ENABLED", "true")
+	t.Setenv("PII_METRICS_PORT", port)
+
+	logBuf := &lockedBuffer{}
+	log.SetOutput(logBuf)
+	defer log.SetOutput(os.Stderr)
+
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	defer func() {
+		os.Stdin = oldStdin
+		os.Stdout = oldStdout
+	}()
+
+	rStdin, wStdin, _ := os.Pipe()
+	rStdout, wStdout, _ := os.Pipe()
+	os.Stdin = rStdin
+	os.Stdout = wStdout
+
+	go func() {
+		_, _ = wStdin.Write([]byte("mail test@example.com here\n"))
+		wStdin.Close()
+	}()
+
+	main()
+	wStdout.Close()
+
+	var out bytes.Buffer
+	_, _ = io.Copy(&out, rStdout)
+	if strings.Contains(out.String(), "test@example.com") {
+		t.Errorf("email not redacted while metrics listen failed: %s", out.String())
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(logBuf.String(), "Metrics server failed") {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Errorf("expected a listen-failure log entry, got: %s", logBuf.String())
+}
+
+// TestShutdownMetricsServerError covers the shutdown-error branch: an in-flight
+// request outliving the grace period makes Shutdown return an error, which must
+// be logged instead of blocking termination.
+func TestShutdownMetricsServerError(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/slow", func(w http.ResponseWriter, _ *http.Request) {
+		close(started)
+		<-release
+	})
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	srv := &http.Server{Handler: mux}
+	go func() { _ = srv.Serve(l) }()
+	defer close(release)
+
+	go func() {
+		resp, err := http.Get("http://" + l.Addr().String() + "/slow")
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("slow request never reached the handler")
+	}
+
+	logBuf := &lockedBuffer{}
+	log.SetOutput(logBuf)
+	defer log.SetOutput(os.Stderr)
+
+	shutdownMetricsServer(srv, 50*time.Millisecond)
+
+	if !strings.Contains(logBuf.String(), "Metrics server shutdown") {
+		t.Errorf("expected a shutdown-error log entry, got: %s", logBuf.String())
+	}
+}
+
+// TestMainWatchFileSigterm covers graceful shutdown in the --watch-file paths:
+// waiting for a file that never appears, tailing a regular file, and reading a
+// FIFO. In every mode SIGTERM must produce a clean exit (code 0).
+func TestMainWatchFileSigterm(t *testing.T) {
+	if os.Getenv("TEST_MAIN_WATCH") == "1" {
+		os.Args = []string{"cleaner", "--watch-file", os.Getenv("TEST_WATCH_FILE")}
+		main()
+		os.Exit(0)
+	}
+
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, dir string) (path string, wantOutput bool)
+	}{
+		{"missing_file", func(t *testing.T, dir string) (string, bool) {
+			return filepath.Join(dir, "never-created.log"), false
+		}},
+		{"regular_file", func(t *testing.T, dir string) (string, bool) {
+			path := filepath.Join(dir, "app.log")
+			if err := os.WriteFile(path, nil, 0o600); err != nil {
+				t.Fatalf("create log file: %v", err)
+			}
+			return path, true
+		}},
+		{"fifo", func(t *testing.T, dir string) (string, bool) {
+			path := filepath.Join(dir, "app.pipe")
+			if err := syscall.Mkfifo(path, 0o666); err != nil {
+				t.Fatalf("mkfifo: %v", err)
+			}
+			return path, true
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path, wantOutput := tc.setup(t, t.TempDir())
+
+			cmd := exec.Command(os.Args[0], "-test.run=TestMainWatchFileSigterm")
+			cmd.Env = append(os.Environ(), "TEST_MAIN_WATCH=1", "TEST_WATCH_FILE="+path)
+
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			stdout, err := cmd.StdoutPipe()
+			if err != nil {
+				t.Fatalf("failed to get stdout pipe: %v", err)
+			}
+
+			outCh := make(chan string, 8)
+			if err := cmd.Start(); err != nil {
+				t.Fatalf("failed to start subprocess: %v", err)
+			}
+			go func() {
+				sc := bufio.NewScanner(stdout)
+				for sc.Scan() {
+					outCh <- sc.Text()
+				}
+				close(outCh)
+			}()
+
+			if wantOutput {
+				// Feed a line and wait for its sanitized copy; seeing output
+				// proves the subprocess is past signal.Notify, so SIGTERM
+				// cannot hit the default handler.
+				go func() {
+					f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
+					if err != nil {
+						return
+					}
+					_, _ = io.WriteString(f, "mail test@example.com here\n")
+					f.Close()
+				}()
+				select {
+				case line := <-outCh:
+					if strings.Contains(line, "test@example.com") {
+						t.Errorf("email not redacted in watch-file output: %q", line)
+					}
+				case <-time.After(10 * time.Second):
+					_ = cmd.Process.Kill()
+					_ = cmd.Wait()
+					t.Fatalf("timed out waiting for sanitized output; stderr: %s", stderr.String())
+				}
+			} else {
+				// No output signal exists in the wait loop; give the
+				// subprocess time to install its signal handler.
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				t.Fatalf("failed to send SIGTERM: %v", err)
+			}
+
+			waitErr := make(chan error, 1)
+			go func() { waitErr <- cmd.Wait() }()
+			select {
+			case err := <-waitErr:
+				if err != nil {
+					t.Errorf("expected clean exit on SIGTERM, got %v; stderr: %s", err, stderr.String())
+				}
+			case <-time.After(10 * time.Second):
+				_ = cmd.Process.Kill()
+				t.Fatal("sidecar did not exit within 10s of SIGTERM")
+			}
+		})
 	}
 }
 
