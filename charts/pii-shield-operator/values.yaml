@@ -71,6 +71,13 @@ sidecar:
   fsGroup: 65532
   # If true, injects the sidecar into 'containers' instead of 'initContainers'
   legacySidecarMode: false
+  # Cluster-wide default salt for deterministic hashing, referenced from an
+  # existing Secret. Used when a PiiPolicy sets neither salt nor
+  # saltSecretKeyRef. The Secret is resolved in each injected pod's
+  # namespace, so it must exist in every namespace where injection happens.
+  saltSecret:
+    name: ""
+    key: "salt"
 
 # Observability Configuration
 metrics:
