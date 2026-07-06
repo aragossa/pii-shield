@@ -18,6 +18,12 @@ Test the Observability Layer locally without setting up an entire Kubernetes clu
    ```
    You should see `piishield_processed_bytes_total` increasing and `piishield_redaction_events_total` counting the masked occurrences!
 
+   The same server exposes a health endpoint for readiness/liveness probes when the sidecar runs long-lived:
+   ```bash
+   curl -s http://localhost:9090/healthz
+   ```
+   `PII_METRICS_PORT` must be an integer between 1 and 65535; an invalid value logs an error and disables the metrics server while log sanitization keeps running (fail-open).
+
 ## 2. Triggering Fail-Open Policy
 
 Test the architectural safeguards to ensure the Sidecar acts as a robust pipe when exhausted.
