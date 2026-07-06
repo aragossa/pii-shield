@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,23 +22,28 @@ import (
 
 func main() {
 	metricsEnabled := os.Getenv("PII_METRICS_ENABLED") == "true"
+	var metricsSrv *http.Server
 	if metricsEnabled {
-		port := os.Getenv("PII_METRICS_PORT")
-		if port == "" {
-			port = "9090"
-		}
-
 		// Wire metrics callback
 		scanner.RedactionCallback = metrics.IncrementRedaction
 
-		go func() {
-			http.Handle("/metrics", promhttp.Handler())
-			log.Printf("Starting Prometheus metrics server on :%s", port)
-			if err := http.ListenAndServe(":"+port, nil); err != nil {
-				log.Printf("Metrics server failed: %v", err)
-			}
-		}()
+		port, err := resolveMetricsPort(os.Getenv("PII_METRICS_PORT"))
+		if err != nil {
+			// The sidecar's job is sanitizing logs; a bad metrics port must not
+			// take the log pipeline down with it (fail-open, matching the
+			// non-fatal handling of a metrics listen failure below).
+			log.Printf("Invalid PII_METRICS_PORT, metrics server disabled: %v", err)
+		} else {
+			metricsSrv = newMetricsServer(port)
+			go func() {
+				log.Printf("Starting Prometheus metrics server on :%s", port)
+				if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					log.Printf("Metrics server failed: %v", err)
+				}
+			}()
+		}
 	}
+	stopMetrics := func() { shutdownMetricsServer(metricsSrv) }
 
 	failPolicy := os.Getenv("PII_FAIL_POLICY")
 	if failPolicy == "" {
@@ -62,6 +69,7 @@ func main() {
 			}
 			select {
 			case <-sigChan:
+				stopMetrics()
 				os.Exit(0)
 			case <-time.After(500 * time.Millisecond):
 			}
@@ -75,6 +83,7 @@ func main() {
 		if isNamedPipe(watchFile) {
 			go func() {
 				<-sigChan
+				stopMetrics()
 				os.Exit(0)
 			}()
 			readFIFO(watchFile, metricsEnabled, failPolicy)
@@ -104,6 +113,7 @@ func main() {
 			}
 			processLine(line.Text, metricsEnabled, failPolicy)
 		}
+		stopMetrics()
 	} else {
 		// Legacy Stdin mode
 		reader := bufio.NewScanner(os.Stdin)
@@ -112,6 +122,7 @@ func main() {
 
 		go func() {
 			<-sigChan
+			stopMetrics()
 			os.Exit(0)
 		}()
 
@@ -131,8 +142,58 @@ func main() {
 				}
 			}
 			fmt.Fprintln(os.Stderr, "Error reading standard input:", err)
+			stopMetrics()
 			os.Exit(1)
 		}
+		stopMetrics()
+	}
+}
+
+const defaultMetricsPort = "9090"
+
+// resolveMetricsPort validates the PII_METRICS_PORT value, falling back to the
+// default when unset.
+func resolveMetricsPort(raw string) (string, error) {
+	if raw == "" {
+		return defaultMetricsPort, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("must be an integer between 1 and 65535, got %q", raw)
+	}
+	return raw, nil
+}
+
+// newMetricsServer builds the metrics HTTP server on a dedicated mux with
+// bounded timeouts. Besides /metrics it exposes /healthz so the CLI can serve
+// as a readiness/liveness target when running as a long-lived sidecar.
+func newMetricsServer(port string) *http.Server {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	return &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+}
+
+// shutdownMetricsServer drains in-flight scrapes before the process exits; a
+// scrape hanging past the grace period must not block sidecar termination.
+func shutdownMetricsServer(srv *http.Server) {
+	if srv == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Metrics server shutdown: %v", err)
 	}
 }
 
