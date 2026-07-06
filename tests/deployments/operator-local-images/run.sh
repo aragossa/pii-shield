@@ -6,6 +6,7 @@ repo_root="$(deployment_repo_root)"
 image_tag="${IMAGE_TAG:-manual-$(date +%Y%m%d%H%M%S)}"
 operator_image="ghcr.io/pii-shield/pii-shield-operator:${image_tag}"
 agent_image="ghcr.io/pii-shield/pii-shield-agent:${image_tag}"
+trap 'cleanup_docker_images "${operator_image}" "${agent_image}" "${REPLAY_IMAGE:-pii-shield-access-log-replay:manual}"' EXIT
 
 # Make sure a local kind cluster exists before we load images and deploy into it
 # (recreate it if it was deleted), so the steps below have somewhere to run.

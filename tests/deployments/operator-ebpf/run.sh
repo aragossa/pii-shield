@@ -21,6 +21,8 @@ spec:
   injectionMode: ebpf
 YAML
 
+wait_for_webhook_injection_ready "${namespace}" ebpf-policy
+
 # Fixed-name pod: delete any leftover from a previous run so re-applying does not
 # re-trigger webhook injection over an already-mutated spec (Duplicate value /
 # pod updates may not add or remove containers).

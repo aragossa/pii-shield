@@ -12,6 +12,7 @@ output_dir="$(ensure_output_dir standalone-helm-local)"
 # it just built. A unique tag forces the Deployment to roll on each run.
 image_tag="${IMAGE_TAG:-manual-$(date +%Y%m%d%H%M%S)}"
 image="${IMAGE_REPO:-pii-shield}:${image_tag}"
+trap 'cleanup_docker_images "${image}"' EXIT
 
 ensure_local_cluster
 docker build -t "${image}" "${repo_root}"

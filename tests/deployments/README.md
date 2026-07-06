@@ -4,7 +4,7 @@ Each deployment path has its own folder with a focused `run.sh`.
 
 Shared utilities live in `shared/`:
 
-- `shared/replay-image`: local replay app image that bakes in `notes/log_example/access.log`.
+- `shared/replay-image`: local replay app image that bakes in the resolved `access.log` fixture (default `notes/log_example/access.log`, overridable with `PII_SHIELD_ACCESS_LOG`).
 - `shared/scripts/common.sh`: common helpers for fixture checks, image loading, replay pod deployment, log collection, and assertions.
 
 ## Operator paths
@@ -18,7 +18,7 @@ Shared utilities live in `shared/`:
 | `operator-pipe` | Existing operator install with `PiiPolicy.spec.injectionMode=pipe` |
 | `operator-ebpf` | Experimental eBPF mutation/rendering only |
 
-`operator-pipe` and `operator-ebpf` assume a live Kubernetes context and an already installed operator. If a Kind context exists but `kind get clusters` returns no clusters, recreate the Kind cluster and reinstall the operator before running those folders.
+All paths are self-contained: they recreate the local Kind cluster if it is missing, and `operator-pipe` / `operator-ebpf` install the operator themselves when it is not present. Scripts that build docker images remove them (and prune dangling layers) on exit via `cleanup_docker_images`. Before creating test pods the scripts wait for the mutating webhook to actually inject (server-side dry-run canary) — right after an install/upgrade the webhook cert can lag and pods would otherwise be created without a sidecar.
 
 ## Runtime and SDK paths
 

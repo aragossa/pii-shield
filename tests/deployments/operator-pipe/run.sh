@@ -17,7 +17,9 @@ ensure_operator_installed
 warn_pipe_agent_compat
 
 kubectl label namespace "${namespace}" pii-shield.io/injection=enabled --overwrite
-kubectl apply -n "${namespace}" -f - <<'YAML'
+# Unquoted heredoc: ${fail_policy} must expand here — the CRD validates
+# failPolicy as an enum (open|closed) and rejects the literal placeholder.
+kubectl apply -n "${namespace}" -f - <<YAML
 apiVersion: core.pii-shield.io/v1alpha1
 kind: PiiPolicy
 metadata:
@@ -27,6 +29,8 @@ spec:
   failPolicy: ${fail_policy}
   originalCommand: sh -c 'while true; do sleep 3600; done'
 YAML
+
+wait_for_webhook_injection_ready "${namespace}" pipe-policy
 
 # The pod has a fixed name and restartPolicy: Never. Re-applying it after a
 # previous run re-runs the mutating webhook over the already-injected spec,

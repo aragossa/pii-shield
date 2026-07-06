@@ -275,6 +275,65 @@ load_replay_image() {
   load_image_into_current_local_cluster "${image}"
 }
 
+# Wait until the mutating webhook actually injects sidecars. Right after the
+# operator is (re)installed its serving cert can lag behind the webhook
+# caBundle (the kubelet refreshes the mounted Secret asynchronously), and with
+# failurePolicy=ignore pods are then silently created without a sidecar. A
+# server-side dry-run of a canary pod is a full end-to-end readiness probe:
+# it exercises the API server -> webhook -> TLS -> policy lookup path without
+# persisting anything.
+wait_for_webhook_injection_ready() {
+  local namespace="${1:-default}"
+  local policy_name="${2:-access-log-replay-policy}"
+  local timeout="${3:-120}"
+  local deadline=$((SECONDS + timeout))
+  local canary
+  canary="$(cat <<YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pii-webhook-readiness-canary
+  labels:
+    pii-shield.io/inject: "true"
+  annotations:
+    pii-shield.io/policy: ${policy_name}
+spec:
+  restartPolicy: Never
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sleep", "1"]
+YAML
+)"
+  echo "waiting for webhook injection readiness (namespace=${namespace} policy=${policy_name})"
+  while true; do
+    if printf '%s' "${canary}" | kubectl apply --dry-run=server -n "${namespace}" -f - \
+        -o jsonpath='{.spec.initContainers[*].name} {.spec.containers[*].name}' 2>/dev/null \
+        | grep -q pii-shield-sidecar; then
+      echo "webhook injection ready"
+      return 0
+    fi
+    if (( SECONDS >= deadline )); then
+      echo "FAIL: webhook did not inject the canary pod within ${timeout}s" >&2
+      echo "check operator logs: kubectl logs -n operator-system deploy/pii-shield-operator" >&2
+      return 1
+    fi
+    sleep 3
+  done
+}
+
+# Remove images built by a deployment test and prune dangling layers so
+# repeated runs do not accumulate docker disk usage. Meant for `trap ... EXIT`
+# in run.sh scripts; never fails the test itself.
+cleanup_docker_images() {
+  local image
+  for image in "$@"; do
+    [[ -n "${image}" ]] && docker image rm -f "${image}" >/dev/null 2>&1 || true
+  done
+  docker image prune -f >/dev/null 2>&1 || true
+  echo "docker cleanup done ($*)"
+}
+
 deploy_operator_replay_pods() {
   local namespace="${NAMESPACE:-default}"
   local replicas="${REPLICAS:-4}"
@@ -310,6 +369,8 @@ spec:
       cpu: 500m
       memory: 256Mi
 YAML
+
+  wait_for_webhook_injection_ready "${namespace}" "${policy_name}"
 
   for i in $(seq 1 "${replicas}"); do
     kubectl apply -n "${namespace}" -f - <<YAML

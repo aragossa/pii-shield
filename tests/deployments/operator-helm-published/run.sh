@@ -3,6 +3,7 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../shared/scripts" && pwd)/common.sh"
 repo_root="$(deployment_repo_root)"
+trap 'cleanup_docker_images "${REPLAY_IMAGE:-pii-shield-access-log-replay:manual}"' EXIT
 
 # Make sure a local kind cluster exists before we install the chart into it
 # (recreate it if it was deleted), so the install below has somewhere to run.

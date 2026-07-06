@@ -5,6 +5,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../shared/scripts" && pwd)/common.s
 repo_root="$(deployment_repo_root)"
 operator_image="${OPERATOR_IMAGE:-controller:manual}"
 agent_image="${AGENT_IMAGE:-pii-shield-agent:manual}"
+trap 'cleanup_docker_images "${operator_image}" "${agent_image}" "${REPLAY_IMAGE:-pii-shield-access-log-replay:manual}"' EXIT
 
 # Make sure a local kind cluster exists before we load images and deploy into it
 # (recreate it if it was deleted), so the steps below have somewhere to run.

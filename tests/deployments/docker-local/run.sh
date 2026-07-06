@@ -6,6 +6,7 @@ repo_root="$(deployment_repo_root)"
 fixture="$(require_access_log_fixture "${repo_root}")"
 output_dir="$(ensure_output_dir docker-local)"
 image="${IMAGE:-pii-shield:manual}"
+trap 'cleanup_docker_images "${image}"' EXIT
 enable_runtime_metrics_by_default
 prepare_pii_env_args
 
