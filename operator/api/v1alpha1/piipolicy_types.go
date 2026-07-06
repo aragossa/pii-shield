@@ -46,10 +46,18 @@ type PiiPolicySpec struct {
 	ConfidenceThreshold float32 `json:"confidenceThreshold,omitempty"`
 
 	// Salt is the deterministic hashing salt, exported to the sidecar as
-	// PII_SALT. Use at least 16 characters. Plaintext in the policy object;
-	// prefer a Secret reference once available (GH-46 follow-up).
+	// PII_SALT. Use at least 16 characters. The value is stored in plain
+	// text in the policy object — prefer SaltSecretKeyRef in production.
 	// +optional
 	Salt string `json:"salt,omitempty"`
+
+	// SaltSecretKeyRef references a key in a Secret that holds the
+	// deterministic hashing salt. Takes precedence over Salt. The Secret is
+	// resolved in the namespace of each injected pod, and the sidecar
+	// receives it as PII_SALT via a secretKeyRef, so the value never appears
+	// in the PiiPolicy object or the mutated pod spec.
+	// +optional
+	SaltSecretKeyRef *corev1.SecretKeySelector `json:"saltSecretKeyRef,omitempty"`
 
 	// EntropyThreshold overrides the scanner entropy threshold.
 	// Exported to the sidecar as PII_ENTROPY_THRESHOLD.

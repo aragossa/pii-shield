@@ -300,6 +300,17 @@ func (m *PodMutator) buildSidecar(mode string, policy *piishieldv1alpha1.PiiPoli
 
 // scannerEnv translates PiiPolicy scanner settings into the PII_* environment
 // variables read by the sidecar agent (cmd/cleaner) and pkg/scanner.
+//
+// Effective config precedence, most specific wins:
+//  1. PiiPolicy fields (saltSecretKeyRef over salt within the policy);
+//  2. operator-level defaults (AGENT_SALT_SECRET_NAME/KEY env on the
+//     operator, normally set from chart values) — used when the policy is
+//     silent;
+//  3. scanner built-in defaults — anything still unset produces no env var.
+//
+// Pod annotations select the policy and target container but deliberately
+// cannot override individual scanner fields: redaction settings must stay
+// auditable through PiiPolicy objects instead of being scattered over pods.
 func scannerEnv(policy *piishieldv1alpha1.PiiPolicy) []corev1.EnvVar {
 	spec := policy.Spec
 	var env []corev1.EnvVar
@@ -309,7 +320,29 @@ func scannerEnv(policy *piishieldv1alpha1.PiiPolicy) []corev1.EnvVar {
 		}
 	}
 
-	add("PII_SALT", spec.Salt)
+	switch {
+	case spec.SaltSecretKeyRef != nil:
+		env = append(env, corev1.EnvVar{
+			Name:      "PII_SALT",
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: spec.SaltSecretKeyRef},
+		})
+	case spec.Salt != "":
+		add("PII_SALT", spec.Salt)
+	default:
+		if name := os.Getenv("AGENT_SALT_SECRET_NAME"); name != "" {
+			key := os.Getenv("AGENT_SALT_SECRET_KEY")
+			if key == "" {
+				key = "salt"
+			}
+			env = append(env, corev1.EnvVar{
+				Name: "PII_SALT",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: name},
+					Key:                  key,
+				}},
+			})
+		}
+	}
 	add("PII_FAIL_POLICY", spec.FailPolicy)
 	if spec.ConfidenceThreshold != 0 {
 		add("PII_CONFIDENCE_THRESHOLD", strconv.FormatFloat(float64(spec.ConfidenceThreshold), 'f', -1, 32))
