@@ -231,6 +231,75 @@ func TestBuildSidecarEmptyPolicyHasNoScannerEnv(t *testing.T) {
 	assert.Empty(t, sidecar.Env)
 }
 
+func findContainer(containers []corev1.Container, name string) *corev1.Container {
+	for i := range containers {
+		if containers[i].Name == name {
+			return &containers[i]
+		}
+	}
+	return nil
+}
+
+func scannerEnvPolicySpec(mode string) piishieldv1alpha1.PiiPolicySpec {
+	return piishieldv1alpha1.PiiPolicySpec{
+		InjectionMode: mode,
+		FailPolicy:    "closed",
+		SaltSecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: "pii-shield-salt"},
+			Key:                  "salt",
+		},
+		SensitiveKeys:   []string{"token"},
+		CustomRegexList: []piishieldv1alpha1.RegexRule{{Name: "ticket", Pattern: "T-[0-9]+"}},
+	}
+}
+
+func assertScannerEnvPropagated(t *testing.T, sidecar *corev1.Container) {
+	t.Helper()
+	got := map[string]corev1.EnvVar{}
+	for _, e := range sidecar.Env {
+		got[e.Name] = e
+	}
+	assert.Equal(t, "pii-shield-salt", got["PII_SALT"].ValueFrom.SecretKeyRef.Name)
+	assert.Equal(t, "closed", got["PII_FAIL_POLICY"].Value)
+	assert.Equal(t, "token", got["PII_SENSITIVE_KEYS"].Value)
+	assert.JSONEq(t, `[{"name":"ticket","pattern":"T-[0-9]+"}]`, got["PII_CUSTOM_REGEX_LIST"].Value)
+}
+
+func TestInjectFileModePropagatesScannerEnv(t *testing.T) {
+	mutator := &PodMutator{LegacySidecarMode: false}
+	pod := &corev1.Pod{
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+	}
+	policy := &piishieldv1alpha1.PiiPolicy{Spec: scannerEnvPolicySpec("file")}
+
+	mutated, err := mutator.injectFileMode(pod, policy, "app")
+	assert.NoError(t, err)
+
+	sidecar := findContainer(mutated.Spec.InitContainers, "pii-shield-sidecar")
+	assert.NotNil(t, sidecar, "native sidecar must be in initContainers")
+	assertScannerEnvPropagated(t, sidecar)
+}
+
+func TestInjectPipeModePropagatesScannerEnv(t *testing.T) {
+	mutator := &PodMutator{LegacySidecarMode: false}
+	pod := &corev1.Pod{
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Command: []string{"node", "app.js"}}}},
+	}
+	policy := &piishieldv1alpha1.PiiPolicy{Spec: scannerEnvPolicySpec("pipe")}
+
+	mutated, err := mutator.injectPipeMode(pod, policy, "app")
+	assert.NoError(t, err)
+
+	sidecar := findContainer(mutated.Spec.InitContainers, "pii-shield-sidecar")
+	assert.NotNil(t, sidecar, "native sidecar must be in initContainers")
+	assertScannerEnvPropagated(t, sidecar)
+
+	// The mkfifo init container is unrelated plumbing and must stay untouched.
+	mkfifo := findContainer(mutated.Spec.InitContainers, "pii-mkfifo")
+	assert.NotNil(t, mkfifo)
+	assert.Empty(t, mkfifo.Env)
+}
+
 func TestScannerEnvSaltPrecedence(t *testing.T) {
 	secretRef := &corev1.SecretKeySelector{
 		LocalObjectReference: corev1.LocalObjectReference{Name: "pii-salt"},

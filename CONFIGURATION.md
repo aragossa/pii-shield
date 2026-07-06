@@ -82,6 +82,12 @@ export PII_SAFE_REGEX_LIST='[{"pattern": "^SAFE-[0-9]{4}$", "name": "SafePrefix"
 
 ## Example (Kubernetes)
 
+> [!NOTE]
+> When the sidecar is injected by the PII-Shield operator, do not set these
+> variables by hand — declare them in a `PiiPolicy` object instead. See
+> [Scanner Configuration via PiiPolicy](operator/README.md#scanner-configuration-via-piipolicy)
+> for the field mapping and the effective precedence rules.
+
 Here is a production-ready configuration using `secretKeyRef` for the salt and defining regex rules.
 
 ```yaml
