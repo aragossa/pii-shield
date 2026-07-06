@@ -1,0 +1,51 @@
+name: Deployment Matrix
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "Deployment group: local, published, cluster, cluster-published, all"
+        required: false
+        default: "all"
+
+permissions:
+  contents: read
+
+env:
+  KIND_VERSION: v0.32.0
+  KIND_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
+
+jobs:
+  deployment-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v5
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v5
+        with:
+          node-version: "22"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v4
+
+      - name: Install kind
+        run: |
+          curl -fsSLo kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  kind" | sha256sum -c -
+          sudo install kind /usr/local/bin/kind
+
+      # No PII_SHIELD_ACCESS_LOG is set, so the runner generates a synthetic
+      # fixture (scripts/generate-access-log-fixture.sh). Real log fixtures
+      # must never be uploaded to CI.
+      - name: Run deployment matrix
+        run: scripts/test-deployments.sh "${{ github.event.inputs.group || 'all' }}"

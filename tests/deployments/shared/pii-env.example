@@ -1,0 +1,23 @@
+# Copy this file to /tmp/pii-shield.env or another path and run scripts with:
+# PII_ENV_FILE=/tmp/pii-shield.env tests/deployments/<deployment-folder>/run.sh
+# cp tests/deployments/shared/pii-env.example /tmp/pii-shield.env
+# PII_ENV_FILE=/tmp/pii-shield.env tests/deployments/standalone-helm-local/run.sh
+
+
+PII_SALT=manual-test-salt-12345
+PII_REQUIRE_STRONG_SALT=true
+PII_ENTROPY_THRESHOLD=3.6
+PII_CONFIDENCE_THRESHOLD=1.0
+PII_MIN_SECRET_LENGTH=6
+PII_SENSITIVE_KEYS=password,secret,token,key,api_key
+PII_ADAPTIVE_THRESHOLD=false
+PII_FAIL_POLICY=open
+
+# Optional deterministic redaction and allow-list rules.
+# Keep JSON on one line when using shell env files.
+# PII_CUSTOM_REGEX_LIST=[{"pattern":"^TX-\\d{5}$","name":"TX"}]
+# PII_SAFE_REGEX_LIST=[{"pattern":"^[a-f0-9]{7}$","name":"GitShortSHA"}]
+
+# Metrics are used by CLI/container and standalone Helm chart paths.
+PII_METRICS_ENABLED=false
+PII_METRICS_PORT=9090
