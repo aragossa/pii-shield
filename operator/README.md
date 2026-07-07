@@ -48,6 +48,86 @@ Once installed, you can protect any application by applying a `PiiPolicy` and ad
    | `pipe` | **Experimental** | Rewrites the target container command through `/bin/sh -c` to redirect output into a named pipe. Can break distroless images (no shell), argument quoting, signal handling, and the app lifecycle. The webhook returns a warning on injection. Not recommended for production. |
    | `ebpf` | Experimental / R&D | Kernel-level interception prototype. Not production-ready. |
 
+## Scanner Configuration via PiiPolicy
+
+The webhook translates `PiiPolicy` fields into the `PII_*` environment
+variables of the injected sidecar (see [CONFIGURATION.md](../CONFIGURATION.md)
+for what each variable does). Fields you leave unset produce no environment
+variable, so the scanner's built-in defaults apply.
+
+| PiiPolicy field | Sidecar env | Format |
+|-----------------|-------------|--------|
+| `failPolicy` | `PII_FAIL_POLICY` | `open` (default) or `closed` |
+| `confidenceThreshold` | `PII_CONFIDENCE_THRESHOLD` | float |
+| `salt` | `PII_SALT` | plain text — prefer `saltSecretKeyRef` |
+| `saltSecretKeyRef` | `PII_SALT` via `secretKeyRef` | Secret resolved in the pod's namespace |
+| `entropyThreshold` | `PII_ENTROPY_THRESHOLD` | float |
+| `minSecretLength` | `PII_MIN_SECRET_LENGTH` | integer ≥ 1 |
+| `sensitiveKeys` | `PII_SENSITIVE_KEYS` | list → comma-separated |
+| `sensitiveKeyPatterns` | `PII_SENSITIVE_KEY_PATTERNS` | list of regexes → comma-separated |
+| `customRegexList` | `PII_CUSTOM_REGEX_LIST` | list of `{name, pattern}` → JSON |
+| `safeRegexList` | `PII_SAFE_REGEX_LIST` | list of `{name, pattern}` → JSON |
+
+### Effective configuration precedence
+
+From most to least specific:
+
+1. **PiiPolicy fields** — within a policy, `saltSecretKeyRef` wins over `salt`.
+2. **Operator-level defaults** — the chart value `sidecar.saltSecret.{name,key}`
+   becomes `AGENT_SALT_SECRET_NAME`/`AGENT_SALT_SECRET_KEY` on the operator and
+   is used when the policy configures no salt at all. The referenced Secret is
+   resolved in each injected pod's namespace, so it must exist in every
+   namespace where injection happens.
+3. **Scanner built-in defaults** — apply to everything still unset.
+
+Pod annotations (`pii-shield.io/policy`, `pii-shield.io/target-container`)
+select which policy and container to use; they deliberately cannot override
+individual scanner fields, so redaction settings stay auditable through
+`PiiPolicy` objects.
+
+### Production example: persistent salt
+
+Without a persistent salt, hashes change on every pod restart and log
+correlation breaks (see the warning in
+[CONFIGURATION.md](../CONFIGURATION.md#critical-security-variables)).
+Reference the salt from a Secret so it never appears in the policy object:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pii-shield-salt
+  namespace: production
+type: Opaque
+stringData:
+  salt: "replace-with-at-least-32-random-characters"
+---
+apiVersion: core.pii-shield.io/v1alpha1
+kind: PiiPolicy
+metadata:
+  name: production-policy
+  namespace: production
+spec:
+  injectionMode: file
+  logPath: /var/log/app/log.txt
+  failPolicy: closed
+  saltSecretKeyRef:
+    name: pii-shield-salt
+    key: salt
+  safeRegexList:
+    - name: GitShortSHA
+      pattern: "^[a-f0-9]{7}$"
+```
+
+To share one salt across all policies, set it once at install time and omit
+salt fields from the policies:
+
+```bash
+helm upgrade --install pii-shield-operator pii-shield/pii-shield-operator \
+  --namespace operator-system \
+  --set sidecar.saltSecret.name=pii-shield-salt
+```
+
 2. **Label your Application Pods:**
    ```yaml
    apiVersion: apps/v1
