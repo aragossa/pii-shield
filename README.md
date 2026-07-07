@@ -4,7 +4,7 @@
 Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave the pod.
 
 [![Release](https://img.shields.io/badge/release-v2.1.1-blue)](https://github.com/pii-shield/pii-shield/releases/tag/v2.1.1) ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg) ![Docker Pulls](https://img.shields.io/docker/pulls/thelisdeep/pii-shield) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)<br>
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12945/badge)](https://www.bestpractices.dev/projects/12945) ![Go Report Card](https://goreportcard.com/badge/github.com/pii-shield/pii-shield?v=1) ![Test Coverage](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg) [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/pii-shield)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12945/badge)](https://www.bestpractices.dev/projects/12945) ![Go Report Card](https://goreportcard.com/badge/github.com/pii-shield/pii-shield?v=1) ![Test Coverage](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg) [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://pii-shield.com/go/sponsors?utm_source=github&utm_medium=readme-badge&utm_campaign=sponsors)
 
 "Don't let PII poison your AI models." PII-Shield ensures that sensitive data never reaches your training dataset, saving you from GDPR-forced model retraining.
 
@@ -201,7 +201,7 @@ These tests start a local Kubernetes API server and etcd through `envtest`, so t
 
 ## Support
 
-PII-Shield is open-source infrastructure for privacy-preserving logs. If this project is useful to you or your organization, you can support its development through [GitHub Sponsors](https://github.com/sponsors/pii-shield).
+PII-Shield is open-source infrastructure for privacy-preserving logs. If this project is useful to you or your organization, you can support its development through [GitHub Sponsors](https://pii-shield.com/go/sponsors?utm_source=github&utm_medium=readme-support&utm_campaign=sponsors).
 
 ## Release Verification
 
