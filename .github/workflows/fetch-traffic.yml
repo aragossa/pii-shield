@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout private stats repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: pii-shield/pii-shield-stats-private
           token: ${{ secrets.GH_TRAFFIC_TOKEN }}
