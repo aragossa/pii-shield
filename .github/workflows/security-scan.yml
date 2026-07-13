@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Run govulncheck
-        uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee
+        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f
         with:
           repo-checkout: false
           go-version-file: ${{ matrix.module.workdir }}/go.mod
