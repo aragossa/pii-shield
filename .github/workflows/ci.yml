@@ -62,6 +62,13 @@ jobs:
       working-directory: operator
       run: go test -v -race -coverprofile=cover.out ./...
 
+    - name: Lint Helm Charts
+      run: |
+        helm lint charts/pii-shield
+        helm lint charts/pii-shield-operator
+        helm template charts/pii-shield >/dev/null
+        helm template charts/pii-shield-operator >/dev/null
+
     - name: Verify Helm Runtime
       run: scripts/verify-helm-runtime.sh
 

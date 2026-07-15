@@ -72,7 +72,13 @@ spec:
               protocol: TCP
           {{- end }}
           env:
-            {{- if .Values.piiConfig.salt }}
+            {{- if .Values.piiConfig.saltSecret.name }}
+            - name: PII_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.piiConfig.saltSecret.name | quote }}
+                  key: {{ .Values.piiConfig.saltSecret.key | quote }}
+            {{- else if .Values.piiConfig.salt }}
             - name: PII_SALT
               value: {{ .Values.piiConfig.salt | quote }}
             {{- end }}
