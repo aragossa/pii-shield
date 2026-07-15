@@ -15,7 +15,9 @@ demo:
   generatorImage:
     repository: alpine
     pullPolicy: IfNotPresent
-    tag: "latest"
+    # Pinned tag so demo installs are reproducible and never pull a floating
+    # `latest`. Demo is disabled by default; this only affects `demo.enabled`.
+    tag: "3.20"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -33,16 +35,29 @@ podAnnotations: {}
 
 podLabels: {}
 
-podSecurityContext: {}
-  # fsGroup: 2000
+# Hardened pod-level defaults. fsGroup makes the shared emptyDir readable by the
+# non-root sidecar regardless of which UID the application container writes as.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+# Hardened container-level defaults. The PII-Shield image is a scratch static
+# binary that only reads the watched file and writes sanitized output to stdout,
+# so it runs comfortably as non-root with a read-only root filesystem.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop:
+    - ALL
+  seccompProfile:
+    type: RuntimeDefault
 
 resources:
   limits:
@@ -55,7 +70,15 @@ resources:
 # PII-Shield Configuration
 piiConfig:
   # PII_SALT: Random byte string used for HMAC hashing. Recommended to set for persistent hashes.
+  # Prefer saltSecret below over this plaintext value for production installs.
   salt: ""
+
+  # Source PII_SALT from an existing Secret instead of a plaintext value. When
+  # saltSecret.name is set it takes precedence over the plaintext `salt` above,
+  # so the salt is never rendered into the Deployment manifest.
+  saltSecret:
+    name: ""
+    key: "salt"
 
   # PII_REQUIRE_STRONG_SALT: Reject explicitly configured salts shorter than 16 bytes
   requireStrongSalt: "false"
@@ -88,6 +111,15 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+# Optional NetworkPolicy restricting ingress to the metrics port only. Egress is
+# left unrestricted so log shipping and DNS keep working. Off by default so it
+# never breaks clusters without a NetworkPolicy-capable CNI.
+networkPolicy:
+  enabled: false
+  # Optional list of NetworkPolicy "from" peers allowed to reach the metrics
+  # port. Empty allows any source (still limited to the metrics port).
+  metricsFrom: []
 
 # Observability Configuration
 metrics:

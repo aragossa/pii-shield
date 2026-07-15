@@ -46,7 +46,9 @@ You can tune the redaction engine via `values.yaml` under `piiConfig`:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `salt` | string | `""` | Persistent HMAC salt. If empty, randomly generated on boot. |
+| `salt` | string | `""` | Persistent HMAC salt. If empty, randomly generated on boot. Prefer `saltSecret` in production. |
+| `saltSecret.name` | string | `""` | Name of an existing Secret to source `PII_SALT` from. When set, it takes precedence over `salt` and the salt is never rendered into the manifest. |
+| `saltSecret.key` | string | `"salt"` | Key within `saltSecret.name` holding the salt. |
 | `requireStrongSalt` | string | `"false"` | Reject explicitly configured salts shorter than 16 bytes. |
 | `entropyThreshold` | string | `"3.6"` | Shannon entropy cut-off determining what is considered a "secret". |
 | `minSecretLength` | string | `"6"` | Minimum string length to apply entropy checks. |
@@ -57,9 +59,29 @@ You can tune the redaction engine via `values.yaml` under `piiConfig`:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `watchFile` | string | `"/var/log/app/output.log"` | File path watched by the PII-Shield sidecar. |
-| `demo.enabled` | bool | `false` | Enables the demo-only Alpine log generator. |
+| `demo.enabled` | bool | `false` | Enables the demo-only Alpine log generator (pinned tag, never `latest`). |
+| `metrics.enabled` | bool | `true` | Expose the Prometheus metrics endpoint and set `PII_METRICS_*`. |
+| `metrics.port` | int | `9090` | Container port for the metrics endpoint. |
 | `metrics.serviceMonitor.enabled` | bool | `false` | Render a Prometheus Operator `ServiceMonitor`. |
 | `metrics.prometheusRule.enabled` | bool | `false` | Render default Prometheus alert rules for PII-Shield availability, restarts, errors, latency, and missing throughput. |
+| `networkPolicy.enabled` | bool | `false` | Render a `NetworkPolicy` restricting ingress to the metrics port only. |
+| `networkPolicy.metricsFrom` | list | `[]` | Optional `from` peers allowed to reach the metrics port. Empty allows any source. |
+
+## Security & Networking
+
+The chart ships production-safe defaults suitable for a controlled production rollout:
+
+- **Hardened security context** (on by default): the sidecar runs as non-root (UID `65532`) with a read-only root filesystem, all Linux capabilities dropped, `allowPrivilegeEscalation: false`, and the `RuntimeDefault` seccomp profile. A pod-level `fsGroup` keeps the shared `emptyDir` readable no matter which UID the application container writes as. Override via `podSecurityContext` / `securityContext` if your platform requires different IDs.
+- **No plaintext secrets by default**: `PII_SALT` is only rendered as a literal if you set `piiConfig.salt`. For production, set `piiConfig.saltSecret.name` (and optionally `.key`) to source the salt from an existing Secret via `secretKeyRef`, so it never appears in the rendered manifest.
+
+Enable a NetworkPolicy that admits traffic only to the metrics port:
+
+```bash
+helm install pii-shield pii-shield/pii-shield \
+  --set networkPolicy.enabled=true
+```
+
+Restrict which peers may scrape metrics by supplying `networkPolicy.metricsFrom` (standard NetworkPolicy `from` selectors). Egress is deliberately left unrestricted so log shipping and DNS keep working.
 
 ## Operational Alerts
 
