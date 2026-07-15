@@ -1,0 +1,34 @@
+[
+  {
+    "name": "baseline_default_salt_sensitive_key",
+    "config": {},
+    "input": "user login password=SuperSecretValue123 ok",
+    "expected": "user login password=[HIDDEN:8836e2] ok"
+  },
+  {
+    "name": "explicit_salt_high_entropy_token",
+    "config": {
+      "salt": "parity-fixed-salt-01234567"
+    },
+    "input": "ref A1b2C3d4E5f6G7h8x9K0mN random tail",
+    "expected": "ref [HIDDEN:2c81ea] random tail"
+  },
+  {
+    "name": "sensitive_keys_override",
+    "config": {
+      "sensitive_keys": [
+        "ssn"
+      ]
+    },
+    "input": "ssn=hello password=world",
+    "expected": "ssn=[HIDDEN:b014e4] password=world"
+  },
+  {
+    "name": "min_secret_length_raised",
+    "config": {
+      "min_secret_length": 64
+    },
+    "input": "ref A1b2C3d4E5f6G7h8x9K0mN random tail",
+    "expected": "ref A1b2C3d4E5f6G7h8x9K0mN random tail"
+  }
+]

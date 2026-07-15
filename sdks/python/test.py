@@ -1,5 +1,28 @@
 from pii_shield import PiiShield, PiiShieldConfig
+import json
+import os
 import sys
+
+def run_parity():
+    """Cross-entrypoint parity: assert the Python SDK reproduces the shared
+    golden generated from the Go scanner. See sdks/parity/cases.json and
+    sdks/parity/parity_test.go (issue #48). The PiiShieldConfig dataclass fields
+    are snake_case and match the golden's config keys directly."""
+    cases_path = os.path.join(os.path.dirname(__file__), "..", "parity", "cases.json")
+    with open(cases_path, "r", encoding="utf-8") as fh:
+        cases = json.load(fh)
+
+    ok = True
+    for tc in cases:
+        cfg = PiiShieldConfig(**tc["config"])
+        shield = PiiShield(config=cfg, wasm_path="../../pii-shield-wasi.wasm")
+        got = shield.redact(tc["input"])
+        if got != tc["expected"]:
+            print(f"PARITY FAIL [{tc['name']}]\n  input:    {tc['input']!r}\n  expected: {tc['expected']!r}\n  got:      {got!r}")
+            ok = False
+        else:
+            print(f"parity ok: {tc['name']}")
+    return ok
 
 def main():
     try:
@@ -21,6 +44,9 @@ def main():
             print(f"Redacted: {redacted}\n---")
             if "FATAL_ERROR" in redacted:
                 passed = False
+
+        if not run_parity():
+            passed = False
 
         if passed:
             print("SUCCESS")

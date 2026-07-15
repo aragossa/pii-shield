@@ -3,6 +3,14 @@ export interface PiiShieldConfig {
     salt?: string;
     confidenceScore?: number;
     failPolicy?: "open" | "closed";
+    /** Minimum candidate token length before entropy checks apply. */
+    minSecretLength?: number;
+    /** Key names whose values are always redacted (case-insensitive). Replaces the defaults. */
+    sensitiveKeys?: string[];
+    /** Disable English bigram analysis (useful for non-English logs). */
+    disableBigramCheck?: boolean;
+    /** Enable experimental statistical adaptive-threshold mode. */
+    adaptiveThreshold?: boolean;
 }
 
 export class PiiShield {

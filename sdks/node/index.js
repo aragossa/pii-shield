@@ -44,7 +44,11 @@ class PiiShield {
         if (config.entropyThreshold) cfgObj.entropy_threshold = config.entropyThreshold;
         if (config.salt) cfgObj.salt = config.salt;
         if (config.confidenceScore) cfgObj.confidence_score = config.confidenceScore;
-        
+        if (config.minSecretLength) cfgObj.min_secret_length = config.minSecretLength;
+        if (config.sensitiveKeys) cfgObj.sensitive_keys = config.sensitiveKeys;
+        if (config.disableBigramCheck !== undefined) cfgObj.disable_bigram_check = config.disableBigramCheck;
+        if (config.adaptiveThreshold !== undefined) cfgObj.adaptive_threshold = config.adaptiveThreshold;
+
         const cfgJson = JSON.stringify(cfgObj);
         const cfgBytes = new TextEncoder().encode(cfgJson);
         const cfgPtr = shield.allocate(cfgBytes.length);

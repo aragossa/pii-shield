@@ -4,17 +4,25 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"unsafe"
 
 	"github.com/pii-shield/pii-shield/pkg/scanner"
 )
 
-// ConfigFromSDK represents configuration passed from Python/Node.js SDKs
+// ConfigFromSDK represents configuration passed from Python/Node.js SDKs.
+// Fields that require compiled/derived state (SensitiveKeyPatterns,
+// CustomRegexes, SafeRegexes) are intentionally NOT accepted here yet; see the
+// "Unsupported config fields" section in the SDK READMEs.
 type ConfigFromSDK struct {
-	EntropyThreshold    float64 `json:"entropy_threshold"`
-	Salt                string  `json:"salt"`
-	ConfidenceThreshold float64 `json:"confidence_score"`
-	FailPolicy          string  `json:"fail_policy"`
+	EntropyThreshold    float64  `json:"entropy_threshold"`
+	Salt                string   `json:"salt"`
+	ConfidenceThreshold float64  `json:"confidence_score"`
+	FailPolicy          string   `json:"fail_policy"`
+	MinSecretLength     int      `json:"min_secret_length"`
+	SensitiveKeys       []string `json:"sensitive_keys"`
+	DisableBigramCheck  *bool    `json:"disable_bigram_check"`
+	AdaptiveThreshold   *bool    `json:"adaptive_threshold"`
 }
 
 // We use a map to pin memory allocations. This prevents Go's Garbage Collector
@@ -65,9 +73,27 @@ func init_config(ptr uint32, length uint32) {
 		if sdkCfg.ConfidenceThreshold > 0 {
 			cfg.ConfidenceThreshold = sdkCfg.ConfidenceThreshold
 		}
-		// The package doesn't have an SDK property for fail policy yet, but we have it passed.
-		// Wait, package level fails are in cmd/cleaner not in scanner.Config. 
-		// If SDK wants to handle Fail-Closed vs Open, we can provide it downstream at SDK wrappers.
+		if sdkCfg.MinSecretLength > 0 {
+			cfg.MinSecretLength = sdkCfg.MinSecretLength
+		}
+		if len(sdkCfg.SensitiveKeys) > 0 {
+			// Normalize the same way loadConfig does for PII_SENSITIVE_KEYS so
+			// SDK-provided keys match the CLI's case-insensitive matching.
+			keys := make([]string, len(sdkCfg.SensitiveKeys))
+			for i, k := range sdkCfg.SensitiveKeys {
+				keys[i] = strings.ToLower(strings.TrimSpace(k))
+			}
+			cfg.SensitiveKeys = keys
+		}
+		if sdkCfg.DisableBigramCheck != nil {
+			cfg.DisableBigramCheck = *sdkCfg.DisableBigramCheck
+		}
+		if sdkCfg.AdaptiveThreshold != nil {
+			cfg.AdaptiveThreshold = *sdkCfg.AdaptiveThreshold
+		}
+		// Fail policy is handled in the SDK wrappers (Node/Python), not in
+		// scanner.Config. SensitiveKeyPatterns, CustomRegexes, and SafeRegexes
+		// require compiled state built in loadConfig and are not forwarded yet.
 	}
 
 	scanner.UpdateConfig(cfg)
