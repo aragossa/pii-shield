@@ -260,9 +260,9 @@ func streamPipeOnce(path string, metricsEnabled bool, failPolicy string, out io.
 		}
 		if err == bufio.ErrTooLong {
 			if failPolicy == "closed" {
-				fmt.Fprintln(out, "[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
+				_, _ = fmt.Fprintln(out, "[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
 			} else {
-				fmt.Fprintln(out, "[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
+				_, _ = fmt.Fprintln(out, "[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
 			}
 		}
 		fmt.Fprintln(os.Stderr, "Error reading pipe:", err)
@@ -281,10 +281,10 @@ func processLine(text string, metricsEnabled bool, failPolicy string, out io.Wri
 				}
 				// Apply Blast Radius Control Policy
 				if failPolicy == "closed" {
-					fmt.Fprintln(out, "[PII_SHIELD_DROP: FATAL_ERROR]")
+					_, _ = fmt.Fprintln(out, "[PII_SHIELD_DROP: FATAL_ERROR]")
 				} else {
 					// Fail-Open: keep the flow alive
-					fmt.Fprintln(out, text)
+					_, _ = fmt.Fprintln(out, text)
 				}
 			}
 		}()
@@ -303,6 +303,6 @@ func processLine(text string, metricsEnabled bool, failPolicy string, out io.Wri
 		}
 
 		// Write back to Stdout for Fluentd/Logstash
-		fmt.Fprintln(out, cleaned)
+		_, _ = fmt.Fprintln(out, cleaned)
 	}()
 }
