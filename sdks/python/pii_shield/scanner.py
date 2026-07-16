@@ -1,7 +1,7 @@
 import os
 import json
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import List, Optional
 from wasmtime import Engine, Linker, Store, Config, Module, WasiConfig
 
 @dataclass
@@ -10,6 +10,14 @@ class PiiShieldConfig:
     salt: Optional[str] = None
     confidence_score: Optional[float] = None
     fail_policy: str = "open"
+    # Minimum candidate token length before entropy checks apply.
+    min_secret_length: Optional[int] = None
+    # Key names whose values are always redacted (case-insensitive). Replaces the defaults.
+    sensitive_keys: Optional[List[str]] = None
+    # Disable English bigram analysis (useful for non-English logs).
+    disable_bigram_check: Optional[bool] = None
+    # Enable experimental statistical adaptive-threshold mode.
+    adaptive_threshold: Optional[bool] = None
 
 class PiiShield:
     def __init__(self, config: PiiShieldConfig = None, wasm_path: str = None):
@@ -57,7 +65,15 @@ class PiiShield:
             cfg_dict["salt"] = self.config.salt
         if self.config.confidence_score is not None:
             cfg_dict["confidence_score"] = self.config.confidence_score
-            
+        if self.config.min_secret_length is not None:
+            cfg_dict["min_secret_length"] = self.config.min_secret_length
+        if self.config.sensitive_keys is not None:
+            cfg_dict["sensitive_keys"] = self.config.sensitive_keys
+        if self.config.disable_bigram_check is not None:
+            cfg_dict["disable_bigram_check"] = self.config.disable_bigram_check
+        if self.config.adaptive_threshold is not None:
+            cfg_dict["adaptive_threshold"] = self.config.adaptive_threshold
+
         cfg_json = json.dumps(cfg_dict).encode("utf-8")
         if len(cfg_json) > 0:
             cfg_ptr = self.allocate(self.store, len(cfg_json))

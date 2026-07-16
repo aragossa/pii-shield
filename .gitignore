@@ -8,6 +8,13 @@
 *.so
 *.dylib
 
+# Compiled WASM FFI kernel (built fresh in CI, never committed)
+pii-shield-wasi.wasm
+
+# Python SDK bytecode cache
+__pycache__/
+*.pyc
+
 # Test binary, built with `go test -c`
 *.test
 

@@ -1,4 +1,40 @@
 const { PiiShield } = require('./index');
+const fs = require('fs');
+const path = require('path');
+
+// Cross-entrypoint parity: load the shared golden (generated from the Go
+// scanner) and assert the Node SDK produces byte-identical output. See
+// sdks/parity/cases.json and sdks/parity/parity_test.go (issue #48).
+const SNAKE_TO_CAMEL = {
+    entropy_threshold: 'entropyThreshold',
+    salt: 'salt',
+    confidence_score: 'confidenceScore',
+    min_secret_length: 'minSecretLength',
+    sensitive_keys: 'sensitiveKeys',
+    disable_bigram_check: 'disableBigramCheck',
+    adaptive_threshold: 'adaptiveThreshold',
+};
+
+async function runParity() {
+    const casesPath = path.join(__dirname, '..', 'parity', 'cases.json');
+    const cases = JSON.parse(fs.readFileSync(casesPath, 'utf8'));
+    let ok = true;
+    for (const tc of cases) {
+        const cfg = {};
+        for (const [k, v] of Object.entries(tc.config)) {
+            cfg[SNAKE_TO_CAMEL[k] || k] = v;
+        }
+        const shield = await PiiShield.create(cfg, "../../pii-shield-wasi.wasm");
+        const got = shield.redact(tc.input);
+        if (got !== tc.expected) {
+            console.error(`PARITY FAIL [${tc.name}]\n  input:    ${JSON.stringify(tc.input)}\n  expected: ${JSON.stringify(tc.expected)}\n  got:      ${JSON.stringify(got)}`);
+            ok = false;
+        } else {
+            console.log(`parity ok: ${tc.name}`);
+        }
+    }
+    return ok;
+}
 
 async function main() {
     try {
@@ -27,7 +63,12 @@ async function main() {
             }
         }
         
-        // Let's assert memory bounds and GC? No, just the correct output is fine for now
+        // Cross-entrypoint parity against the shared golden.
+        const parityOk = await runParity();
+        if (!parityOk) {
+            passed = false;
+        }
+
         if (passed) {
             console.log("SUCCESS");
         } else {
