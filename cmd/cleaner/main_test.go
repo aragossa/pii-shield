@@ -625,12 +625,32 @@ func TestMainMetricsListenFailure(t *testing.T) {
 	os.Stdin = rStdin
 	os.Stdout = wStdout
 
+	// Feed a line but keep stdin open, so main stays in its scan loop while the
+	// metrics goroutine reports the bind failure. Closing stdin here instead
+	// would let main return and Shutdown the metrics server first, in which case
+	// ListenAndServe returns ErrServerClosed rather than the bind error and the
+	// failure is never logged.
+	_, _ = wStdin.Write([]byte("mail test@example.com here\n"))
+
+	mainDone := make(chan struct{})
 	go func() {
-		_, _ = wStdin.Write([]byte("mail test@example.com here\n"))
-		wStdin.Close()
+		main()
+		close(mainDone)
 	}()
 
-	main()
+	logged := false
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(logBuf.String(), "Metrics server failed") {
+			logged = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// Release main only once the listen failure has been observed.
+	wStdin.Close()
+	<-mainDone
 	wStdout.Close()
 
 	var out bytes.Buffer
@@ -638,15 +658,9 @@ func TestMainMetricsListenFailure(t *testing.T) {
 	if strings.Contains(out.String(), "test@example.com") {
 		t.Errorf("email not redacted while metrics listen failed: %s", out.String())
 	}
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if strings.Contains(logBuf.String(), "Metrics server failed") {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
+	if !logged {
+		t.Errorf("expected a listen-failure log entry, got: %s", logBuf.String())
 	}
-	t.Errorf("expected a listen-failure log entry, got: %s", logBuf.String())
 }
 
 // TestShutdownMetricsServerError covers the shutdown-error branch: an in-flight
