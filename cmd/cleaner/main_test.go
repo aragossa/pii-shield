@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -16,6 +17,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/pii-shield/pii-shield/pkg/scanner"
 )
 
 func TestMainSuccess(t *testing.T) {
@@ -73,22 +76,51 @@ func TestReadFIFO(t *testing.T) {
 		t.Fatalf("mkfifo: %v", err)
 	}
 
-	oldStdout := os.Stdout
 	rOut, wOut, _ := os.Pipe()
-	os.Stdout = wOut
-	defer func() { os.Stdout = oldStdout }()
 
-	// Collect sanitized stdout lines as readFIFO emits them.
+	// Collect sanitized lines as readFIFO emits them.
 	outCh := make(chan string, 8)
+	scanDone := make(chan struct{})
 	go func() {
+		defer close(scanDone)
 		sc := bufio.NewScanner(rOut)
 		for sc.Scan() {
 			outCh <- sc.Text()
 		}
-		close(outCh)
 	}()
 
-	go readFIFO(fifo, false, "open")
+	stop := make(chan struct{})
+	fifoDone := make(chan struct{})
+	go func() {
+		defer close(fifoDone)
+		readFIFO(fifo, false, "open", wOut, stop)
+	}()
+
+	// readFIFO must not outlive the test: once t.TempDir() is removed, a
+	// surviving reopen loop would log.Fatalf on the deleted pipe and take the
+	// whole test binary down with it.
+	t.Cleanup(func() {
+		close(stop)
+		// readFIFO only observes stop between opens, and a pending open blocks
+		// in the kernel until a writer connects. Nudge it with a non-blocking
+		// writer until the loop exits: O_NONBLOCK fails with ENXIO instead of
+		// blocking when readFIFO is not (yet) waiting in open, so this cannot
+		// deadlock against a loop that has already stopped.
+		for done := false; !done; {
+			select {
+			case <-fifoDone:
+				done = true
+			default:
+				if w, err := os.OpenFile(fifo, os.O_WRONLY|syscall.O_NONBLOCK, os.ModeNamedPipe); err == nil {
+					_ = w.Close()
+				}
+				time.Sleep(2 * time.Millisecond)
+			}
+		}
+		_ = wOut.Close()
+		<-scanDone
+		_ = rOut.Close()
+	})
 
 	writeLine := func(s string) {
 		w, err := os.OpenFile(fifo, os.O_WRONLY, os.ModeNamedPipe)
@@ -128,9 +160,6 @@ func TestReadFIFO(t *testing.T) {
 	if !strings.Contains(line2, "second line ok") {
 		t.Errorf("second writer not processed; FIFO not reopened after EOF: %q", line2)
 	}
-
-	os.Stdout = oldStdout
-	wOut.Close()
 }
 
 func TestIsNamedPipe(t *testing.T) {
@@ -180,23 +209,21 @@ func TestStreamPipeOnceBufferOverflow(t *testing.T) {
 				t.Fatalf("mkfifo: %v", err)
 			}
 
-			oldStdout := os.Stdout
 			rOut, wOut, _ := os.Pipe()
-			os.Stdout = wOut
-			defer func() { os.Stdout = oldStdout }()
 
 			outCh := make(chan string, 8)
+			scanDone := make(chan struct{})
 			go func() {
+				defer close(scanDone)
 				sc := bufio.NewScanner(rOut)
 				sc.Buffer(make([]byte, 1024*1024), 20*1024*1024)
 				for sc.Scan() {
 					outCh <- sc.Text()
 				}
-				close(outCh)
 			}()
 
 			done := make(chan error, 1)
-			go func() { done <- streamPipeOnce(fifo, tc.metricsEnabled, tc.failPolicy) }()
+			go func() { done <- streamPipeOnce(fifo, tc.metricsEnabled, tc.failPolicy, wOut) }()
 
 			// A line larger than the 10MB buffer with no newline forces
 			// bufio.ErrTooLong. streamPipeOnce closes the pipe on the error, so
@@ -228,9 +255,74 @@ func TestStreamPipeOnceBufferOverflow(t *testing.T) {
 				t.Fatal("streamPipeOnce did not return after writer closed")
 			}
 
-			os.Stdout = oldStdout
 			wOut.Close()
+			<-scanDone
+			rOut.Close()
 		})
+	}
+}
+
+// TestProcessLinePanicRecovery covers the Blast Radius Control Policy: a panic
+// raised while sanitizing one line must never take the sidecar down. Fail-open
+// keeps the stream alive by passing the original line through; fail-closed drops
+// it behind a marker rather than risk emitting unredacted PII. The panic is
+// induced via scanner.RedactionCallback, which ScanAndRedact invokes on every
+// redaction.
+func TestProcessLinePanicRecovery(t *testing.T) {
+	const input = "contact john.doe@example.com now"
+
+	cases := []struct {
+		name       string
+		failPolicy string
+		want       string
+	}{
+		{"open_passes_original_line_through", "open", input},
+		{"closed_drops_line", "closed", "[PII_SHIELD_DROP: FATAL_ERROR]"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			old := scanner.RedactionCallback
+			scanner.RedactionCallback = func(string) { panic("induced scanner panic") }
+			t.Cleanup(func() { scanner.RedactionCallback = old })
+
+			var out bytes.Buffer
+			processLine(input, true, tc.failPolicy, &out)
+
+			if got := strings.TrimSpace(out.String()); got != tc.want {
+				t.Errorf("failPolicy %q: got %q, want %q", tc.failPolicy, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestReadFIFOOpenErrorFatal covers readFIFO's fatal branch: when the pipe cannot
+// be opened at all, the sidecar must exit non-zero with a diagnostic rather than
+// spin in the reopen loop. log.Fatalf exits the process, so this runs in a
+// subprocess.
+func TestReadFIFOOpenErrorFatal(t *testing.T) {
+	if os.Getenv("TEST_READFIFO_FATAL") == "1" {
+		readFIFO(os.Getenv("TEST_READFIFO_PATH"), false, "open", os.Stdout, nil)
+		return
+	}
+
+	missing := filepath.Join(t.TempDir(), "does-not-exist.pipe")
+	cmd := exec.Command(os.Args[0], "-test.run=TestReadFIFOOpenErrorFatal")
+	cmd.Env = append(os.Environ(), "TEST_READFIFO_FATAL=1", "TEST_READFIFO_PATH="+missing)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("expected a non-zero exit on unopenable pipe, got %v", err)
+	}
+	if exitErr.ExitCode() != 1 {
+		t.Errorf("expected exit code 1, got %d", exitErr.ExitCode())
+	}
+	if !strings.Contains(stderr.String(), "Failed to open pipe") {
+		t.Errorf("expected stderr to report the open failure, got: %s", stderr.String())
 	}
 }
 
@@ -238,7 +330,7 @@ func TestStreamPipeOnceBufferOverflow(t *testing.T) {
 // readable pipe makes streamPipeOnce return an error (which readFIFO turns fatal).
 func TestStreamPipeOnceOpenError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "does-not-exist.pipe")
-	if err := streamPipeOnce(missing, false, "open"); err == nil {
+	if err := streamPipeOnce(missing, false, "open", io.Discard); err == nil {
 		t.Errorf("expected an error opening a nonexistent pipe, got nil")
 	}
 }
@@ -533,12 +625,32 @@ func TestMainMetricsListenFailure(t *testing.T) {
 	os.Stdin = rStdin
 	os.Stdout = wStdout
 
+	// Feed a line but keep stdin open, so main stays in its scan loop while the
+	// metrics goroutine reports the bind failure. Closing stdin here instead
+	// would let main return and Shutdown the metrics server first, in which case
+	// ListenAndServe returns ErrServerClosed rather than the bind error and the
+	// failure is never logged.
+	_, _ = wStdin.Write([]byte("mail test@example.com here\n"))
+
+	mainDone := make(chan struct{})
 	go func() {
-		_, _ = wStdin.Write([]byte("mail test@example.com here\n"))
-		wStdin.Close()
+		main()
+		close(mainDone)
 	}()
 
-	main()
+	logged := false
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(logBuf.String(), "Metrics server failed") {
+			logged = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// Release main only once the listen failure has been observed.
+	wStdin.Close()
+	<-mainDone
 	wStdout.Close()
 
 	var out bytes.Buffer
@@ -546,15 +658,9 @@ func TestMainMetricsListenFailure(t *testing.T) {
 	if strings.Contains(out.String(), "test@example.com") {
 		t.Errorf("email not redacted while metrics listen failed: %s", out.String())
 	}
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if strings.Contains(logBuf.String(), "Metrics server failed") {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
+	if !logged {
+		t.Errorf("expected a listen-failure log entry, got: %s", logBuf.String())
 	}
-	t.Errorf("expected a listen-failure log entry, got: %s", logBuf.String())
 }
 
 // TestShutdownMetricsServerError covers the shutdown-error branch: an in-flight

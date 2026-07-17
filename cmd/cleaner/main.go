@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -86,7 +87,7 @@ func main() {
 				stopMetrics()
 				os.Exit(0)
 			}()
-			readFIFO(watchFile, metricsEnabled, failPolicy)
+			readFIFO(watchFile, metricsEnabled, failPolicy, os.Stdout, nil)
 			return
 		}
 
@@ -111,7 +112,7 @@ func main() {
 			if line.Err != nil {
 				continue
 			}
-			processLine(line.Text, metricsEnabled, failPolicy)
+			processLine(line.Text, metricsEnabled, failPolicy, os.Stdout)
 		}
 		stopMetrics()
 	} else {
@@ -127,7 +128,7 @@ func main() {
 		}()
 
 		for reader.Scan() {
-			processLine(reader.Text(), metricsEnabled, failPolicy)
+			processLine(reader.Text(), metricsEnabled, failPolicy, os.Stdout)
 		}
 
 		if err := reader.Err(); err != nil {
@@ -207,14 +208,28 @@ func isNamedPipe(path string) bool {
 	return err == nil && fi.Mode()&os.ModeNamedPipe != 0
 }
 
-// readFIFO continuously sanitizes lines read from a named pipe. Opening the FIFO
-// read-only blocks until a writer connects, which keeps the sidecar running so
-// the pod reaches Ready. When the writer closes the pipe (EOF) the FIFO is
-// reopened to block for the next writer; the loop ends only on SIGTERM/SIGINT
-// (handled by the os.Exit goroutine installed by the caller).
-func readFIFO(path string, metricsEnabled bool, failPolicy string) {
+// readFIFO continuously sanitizes lines read from a named pipe, writing the
+// sanitized stream to out. Opening the FIFO read-only blocks until a writer
+// connects, which keeps the sidecar running so the pod reaches Ready. When the
+// writer closes the pipe (EOF) the FIFO is reopened to block for the next
+// writer.
+//
+// Closing stop ends the loop after the current writer disconnects; a nil stop
+// (the sidecar's own usage, which ends via SIGTERM/SIGINT and the os.Exit
+// goroutine installed by the caller) loops forever. Because a pending open
+// blocks in the kernel until a writer connects, stop is only observed between
+// opens: to guarantee prompt exit a caller closes stop and then opens the FIFO
+// for writing to release the pending open. That nudge must be non-blocking
+// (O_NONBLOCK) and retried until the loop exits, since a blocking open for
+// write would itself hang once the loop has already stopped reading.
+func readFIFO(path string, metricsEnabled bool, failPolicy string, out io.Writer, stop <-chan struct{}) {
 	for {
-		if err := streamPipeOnce(path, metricsEnabled, failPolicy); err != nil {
+		select {
+		case <-stop:
+			return
+		default:
+		}
+		if err := streamPipeOnce(path, metricsEnabled, failPolicy, out); err != nil {
 			log.Fatalf("Failed to open pipe %s: %v", path, err)
 		}
 		// Writer closed the pipe; loop to reopen and block for the next writer.
@@ -222,9 +237,9 @@ func readFIFO(path string, metricsEnabled bool, failPolicy string) {
 }
 
 // streamPipeOnce opens the FIFO (blocking until a writer connects), sanitizes
-// every line until the writer closes the pipe (EOF), then returns. It returns a
-// non-nil error only if the pipe could not be opened.
-func streamPipeOnce(path string, metricsEnabled bool, failPolicy string) error {
+// every line into out until the writer closes the pipe (EOF), then returns. It
+// returns a non-nil error only if the pipe could not be opened.
+func streamPipeOnce(path string, metricsEnabled bool, failPolicy string, out io.Writer) error {
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModeNamedPipe)
 	if err != nil {
 		return err
@@ -236,7 +251,7 @@ func streamPipeOnce(path string, metricsEnabled bool, failPolicy string) error {
 	sc.Buffer(buf, 10*1024*1024)
 
 	for sc.Scan() {
-		processLine(sc.Text(), metricsEnabled, failPolicy)
+		processLine(sc.Text(), metricsEnabled, failPolicy, out)
 	}
 
 	if err := sc.Err(); err != nil {
@@ -245,9 +260,9 @@ func streamPipeOnce(path string, metricsEnabled bool, failPolicy string) error {
 		}
 		if err == bufio.ErrTooLong {
 			if failPolicy == "closed" {
-				fmt.Println("[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
+				_, _ = fmt.Fprintln(out, "[PII_SHIELD_DROP: BUFFER_OVERFLOW]")
 			} else {
-				fmt.Println("[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
+				_, _ = fmt.Fprintln(out, "[PII_SHIELD_WARN: BUFFER_OVERFLOW, STREAM_BROKEN]")
 			}
 		}
 		fmt.Fprintln(os.Stderr, "Error reading pipe:", err)
@@ -256,7 +271,7 @@ func streamPipeOnce(path string, metricsEnabled bool, failPolicy string) error {
 	return nil
 }
 
-func processLine(text string, metricsEnabled bool, failPolicy string) {
+func processLine(text string, metricsEnabled bool, failPolicy string, out io.Writer) {
 	// Functional wrapper to catch panics per-line
 	func() {
 		defer func() {
@@ -266,10 +281,10 @@ func processLine(text string, metricsEnabled bool, failPolicy string) {
 				}
 				// Apply Blast Radius Control Policy
 				if failPolicy == "closed" {
-					fmt.Println("[PII_SHIELD_DROP: FATAL_ERROR]")
+					_, _ = fmt.Fprintln(out, "[PII_SHIELD_DROP: FATAL_ERROR]")
 				} else {
 					// Fail-Open: keep the flow alive
-					fmt.Println(text)
+					_, _ = fmt.Fprintln(out, text)
 				}
 			}
 		}()
@@ -288,6 +303,6 @@ func processLine(text string, metricsEnabled bool, failPolicy string) {
 		}
 
 		// Write back to Stdout for Fluentd/Logstash
-		fmt.Println(cleaned)
+		_, _ = fmt.Fprintln(out, cleaned)
 	}()
 }
