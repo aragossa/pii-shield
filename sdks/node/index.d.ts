@@ -11,6 +11,19 @@ export interface PiiShieldConfig {
     disableBigramCheck?: boolean;
     /** Enable experimental statistical adaptive-threshold mode. */
     adaptiveThreshold?: boolean;
+    /** Regex patterns matched against key names to detect sensitive keys. */
+    sensitiveKeyPatterns?: string[];
+    /** Custom rules forcing redaction of matching tokens. */
+    customRegexes?: CustomRegexRule[];
+    /** Whitelist rules exempting matching tokens from redaction. */
+    safeRegexes?: CustomRegexRule[];
+}
+
+export interface CustomRegexRule {
+    /** RE2 pattern. An invalid pattern is ignored rather than throwing. */
+    pattern: string;
+    /** Label for the rule. */
+    name: string;
 }
 
 export class PiiShield {

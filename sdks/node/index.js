@@ -48,6 +48,9 @@ class PiiShield {
         if (config.sensitiveKeys) cfgObj.sensitive_keys = config.sensitiveKeys;
         if (config.disableBigramCheck !== undefined) cfgObj.disable_bigram_check = config.disableBigramCheck;
         if (config.adaptiveThreshold !== undefined) cfgObj.adaptive_threshold = config.adaptiveThreshold;
+        if (config.sensitiveKeyPatterns) cfgObj.sensitive_key_patterns = config.sensitiveKeyPatterns;
+        if (config.customRegexes) cfgObj.custom_regexes = config.customRegexes;
+        if (config.safeRegexes) cfgObj.safe_regexes = config.safeRegexes;
 
         const cfgJson = JSON.stringify(cfgObj);
         const cfgBytes = new TextEncoder().encode(cfgJson);

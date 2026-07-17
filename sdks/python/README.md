@@ -40,15 +40,17 @@ scanner default, so redaction matches the CLI for the same config.
 | `sensitive_keys` | list[str] | Key names whose values are always redacted (case-insensitive). Replaces the defaults. |
 | `disable_bigram_check` | bool | Disable English bigram analysis (useful for non-English logs). |
 | `adaptive_threshold` | bool | Enable the **experimental** statistical adaptive-threshold mode. |
+| `sensitive_key_patterns` | list[str] | Regex patterns matched against key names (equivalent to `PII_SENSITIVE_KEY_PATTERNS`). |
+| `custom_regexes` | list[dict] | Rules forcing redaction: `[{"pattern": ..., "name": ...}]` (equivalent to `PII_CUSTOM_REGEX_LIST`). |
+| `safe_regexes` | list[dict] | Whitelist rules exempting matching tokens (equivalent to `PII_SAFE_REGEX_LIST`). |
 | `fail_policy` | `"open"` \| `"closed"` | On an internal error, `open` returns the input unchanged; `closed` returns a drop marker. Handled in this wrapper. |
 
-### Unsupported config fields
+### Invalid regex handling
 
-These core options are **not configurable via the SDK yet** — they require
-compiled state built only in the CLI/env path. Use the CLI or Kubernetes
-deployment if you need them: `sensitive_key_patterns`, `custom_regexes`,
-`safe_regexes` (env vars `PII_SENSITIVE_KEY_PATTERNS`, `PII_CUSTOM_REGEX_LIST`,
-`PII_SAFE_REGEX_LIST`).
+The CLI fails fast on an invalid pattern at startup. The SDK deliberately does
+**not**: an invalid `sensitive_key_patterns`, `custom_regexes`, or `safe_regexes`
+entry is ignored and the default is kept, so a bad pattern can never terminate
+your Python process. Validate patterns before passing them if you need strictness.
 
 ## Features
 

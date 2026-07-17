@@ -11,18 +11,21 @@ import (
 )
 
 // ConfigFromSDK represents configuration passed from Python/Node.js SDKs.
-// Fields that require compiled/derived state (SensitiveKeyPatterns,
-// CustomRegexes, SafeRegexes) are intentionally NOT accepted here yet; see the
-// "Unsupported config fields" section in the SDK READMEs.
+// Every field the core scanner supports at scan time is accepted here; the
+// regex-backed fields are compiled via the shared scanner.Apply* helpers so the
+// SDKs and the CLI derive identical matching state.
 type ConfigFromSDK struct {
-	EntropyThreshold    float64  `json:"entropy_threshold"`
-	Salt                string   `json:"salt"`
-	ConfidenceThreshold float64  `json:"confidence_score"`
-	FailPolicy          string   `json:"fail_policy"`
-	MinSecretLength     int      `json:"min_secret_length"`
-	SensitiveKeys       []string `json:"sensitive_keys"`
-	DisableBigramCheck  *bool    `json:"disable_bigram_check"`
-	AdaptiveThreshold   *bool    `json:"adaptive_threshold"`
+	EntropyThreshold     float64                     `json:"entropy_threshold"`
+	Salt                 string                      `json:"salt"`
+	ConfidenceThreshold  float64                     `json:"confidence_score"`
+	FailPolicy           string                      `json:"fail_policy"`
+	MinSecretLength      int                         `json:"min_secret_length"`
+	SensitiveKeys        []string                    `json:"sensitive_keys"`
+	DisableBigramCheck   *bool                       `json:"disable_bigram_check"`
+	AdaptiveThreshold    *bool                       `json:"adaptive_threshold"`
+	SensitiveKeyPatterns []string                    `json:"sensitive_key_patterns"`
+	CustomRegexes        []scanner.CustomRegexConfig `json:"custom_regexes"`
+	SafeRegexes          []scanner.CustomRegexConfig `json:"safe_regexes"`
 }
 
 // We use a map to pin memory allocations. This prevents Go's Garbage Collector
@@ -91,9 +94,23 @@ func init_config(ptr uint32, length uint32) {
 		if sdkCfg.AdaptiveThreshold != nil {
 			cfg.AdaptiveThreshold = *sdkCfg.AdaptiveThreshold
 		}
+		// Regex-backed fields go through the shared compile helpers. Errors are
+		// deliberately swallowed: unlike the CLI (which fails fast at startup),
+		// an invalid pattern from an SDK caller must never terminate the host
+		// Node/Python process. A rejected list simply leaves the default in place.
+		if len(sdkCfg.SensitiveKeyPatterns) > 0 {
+			if err := cfg.ApplySensitiveKeyPatterns(sdkCfg.SensitiveKeyPatterns); err != nil {
+				cfg.SensitiveKeyPatterns = nil
+			}
+		}
+		if len(sdkCfg.CustomRegexes) > 0 {
+			_ = cfg.ApplyCustomRegexes(sdkCfg.CustomRegexes)
+		}
+		if len(sdkCfg.SafeRegexes) > 0 {
+			_ = cfg.ApplySafeRegexes(sdkCfg.SafeRegexes)
+		}
 		// Fail policy is handled in the SDK wrappers (Node/Python), not in
-		// scanner.Config. SensitiveKeyPatterns, CustomRegexes, and SafeRegexes
-		// require compiled state built in loadConfig and are not forwarded yet.
+		// scanner.Config.
 	}
 
 	scanner.UpdateConfig(cfg)
