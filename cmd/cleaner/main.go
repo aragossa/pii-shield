@@ -23,11 +23,31 @@ import (
 
 func main() {
 	metricsEnabled := os.Getenv("PII_METRICS_ENABLED") == "true"
+
+	// Optional periodic value-metrics summary in the logs (STR-2.2). Opt-in via
+	// PII_STATS_LOG_INTERVAL so default log output is unchanged.
+	statsInterval := parseStatsInterval(os.Getenv("PII_STATS_LOG_INTERVAL"))
+	if raw := os.Getenv("PII_STATS_LOG_INTERVAL"); raw != "" && statsInterval == 0 {
+		log.Printf("Invalid PII_STATS_LOG_INTERVAL %q, stats summary disabled", raw)
+	}
+	if statsInterval > 0 {
+		stats = newStatsCollector()
+	}
+
+	// A single callback fans out to metrics and/or the stats summary.
+	if metricsEnabled || stats != nil {
+		scanner.RedactionCallback = func(strategy string) {
+			if metricsEnabled {
+				metrics.IncrementRedaction(strategy)
+			}
+			if stats != nil {
+				stats.recordRedaction(strategy)
+			}
+		}
+	}
+
 	var metricsSrv *http.Server
 	if metricsEnabled {
-		// Wire metrics callback
-		scanner.RedactionCallback = metrics.IncrementRedaction
-
 		port, err := resolveMetricsPort(os.Getenv("PII_METRICS_PORT"))
 		if err != nil {
 			// The sidecar's job is sanitizing logs; a bad metrics port must not
@@ -45,6 +65,25 @@ func main() {
 		}
 	}
 	stopMetrics := func() { shutdownMetricsServer(metricsSrv, metricsShutdownGrace) }
+
+	// finalize runs on every shutdown path: emit a last stats summary (if enabled)
+	// and drain the metrics server.
+	finalize := func() {
+		if stats != nil {
+			log.Print(stats.summary())
+		}
+		stopMetrics()
+	}
+
+	if stats != nil {
+		go func() {
+			ticker := time.NewTicker(statsInterval)
+			defer ticker.Stop()
+			for range ticker.C {
+				log.Print(stats.summary())
+			}
+		}()
+	}
 
 	failPolicy := os.Getenv("PII_FAIL_POLICY")
 	if failPolicy == "" {
@@ -70,7 +109,7 @@ func main() {
 			}
 			select {
 			case <-sigChan:
-				stopMetrics()
+				finalize()
 				os.Exit(0)
 			case <-time.After(500 * time.Millisecond):
 			}
@@ -84,7 +123,7 @@ func main() {
 		if isNamedPipe(watchFile) {
 			go func() {
 				<-sigChan
-				stopMetrics()
+				finalize()
 				os.Exit(0)
 			}()
 			readFIFO(watchFile, metricsEnabled, failPolicy, os.Stdout, nil)
@@ -114,7 +153,7 @@ func main() {
 			}
 			processLine(line.Text, metricsEnabled, failPolicy, os.Stdout)
 		}
-		stopMetrics()
+		finalize()
 	} else {
 		// Legacy Stdin mode
 		reader := bufio.NewScanner(os.Stdin)
@@ -123,7 +162,7 @@ func main() {
 
 		go func() {
 			<-sigChan
-			stopMetrics()
+			finalize()
 			os.Exit(0)
 		}()
 
@@ -143,10 +182,10 @@ func main() {
 				}
 			}
 			fmt.Fprintln(os.Stderr, "Error reading standard input:", err)
-			stopMetrics()
+			finalize()
 			os.Exit(1)
 		}
-		stopMetrics()
+		finalize()
 	}
 }
 
@@ -293,6 +332,9 @@ func processLine(text string, metricsEnabled bool, failPolicy string, out io.Wri
 		if metricsEnabled {
 			start = time.Now()
 			metrics.ProcessedBytesTotal.Add(float64(len(text)))
+		}
+		if stats != nil {
+			stats.recordLine(len(text))
 		}
 
 		// Core logic

@@ -11,7 +11,7 @@ COPY go.mod ./
 COPY . .
 
 # Build static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o pii-shield cmd/cleaner/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o pii-shield ./cmd/cleaner
 
 # Stage 2: Run
 FROM scratch
