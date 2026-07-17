@@ -48,6 +48,8 @@ spec:
           value: "{{ .Values.sidecar.fsGroup }}"
         - name: LEGACY_SIDECAR_MODE
           value: "{{ .Values.sidecar.legacySidecarMode }}"
+        - name: STRICT_MODE
+          value: "{{ .Values.webhook.strictMode }}"
         {{- if .Values.sidecar.saltSecret.name }}
         - name: AGENT_SALT_SECRET_NAME
           value: "{{ .Values.sidecar.saltSecret.name }}"
