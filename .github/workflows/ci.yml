@@ -68,6 +68,13 @@ jobs:
         helm lint charts/pii-shield-operator
         helm template charts/pii-shield >/dev/null
         helm template charts/pii-shield-operator >/dev/null
+        # Webhook policy rendering: overrides must reach the manifests.
+        helm template charts/pii-shield-operator \
+          --set webhook.failurePolicy=Fail --set webhook.strictMode=true \
+          | grep -q 'failurePolicy: Fail'
+        helm template charts/pii-shield-operator \
+          --set webhook.strictMode=true \
+          | grep -q 'STRICT_MODE'
 
     - name: Verify Helm Runtime
       run: scripts/verify-helm-runtime.sh

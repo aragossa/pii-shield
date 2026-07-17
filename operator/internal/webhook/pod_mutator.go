@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	piishieldv1alpha1 "github.com/pii-shield/pii-shield/operator/api/v1alpha1"
@@ -22,6 +23,24 @@ type PodMutator struct {
 	Client            client.Client
 	Decoder           admission.Decoder
 	LegacySidecarMode bool
+	// StrictMode denies pods that request injection but have no resolvable
+	// PiiPolicy. It is the default; the STRICT_MODE env var (set from the
+	// chart's webhook.strictMode value) overrides it at runtime.
+	StrictMode bool
+}
+
+// strictMode reports whether the webhook should deny pods that request
+// injection but have no resolvable PiiPolicy. The STRICT_MODE env var is
+// authoritative when set; otherwise the struct field (used by tests) applies.
+func (m *PodMutator) strictMode() bool {
+	switch strings.ToLower(os.Getenv("STRICT_MODE")) {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return m.StrictMode
+	}
 }
 
 // +kubebuilder:webhook:path=/mutate-v1-pod,mutating=true,failurePolicy=ignore,groups="",resources=pods,verbs=create;update,versions=v1,name=mpod.kb.io,sideEffects=None,admissionReviewVersions=v1
@@ -42,9 +61,23 @@ func (m *PodMutator) Handle(ctx context.Context, req admission.Request) admissio
 		policyName = "default"
 	}
 
+	log := logf.FromContext(ctx)
 	policy := &piishieldv1alpha1.PiiPolicy{}
 	if err := m.Client.Get(ctx, client.ObjectKey{Name: policyName, Namespace: req.Namespace}, policy); err != nil {
-		return admission.Allowed("Policy not found, skipping injection")
+		if m.strictMode() {
+			log.Info("strict mode: denying pod that requests injection but has no PiiPolicy",
+				"pod", pod.Name, "namespace", req.Namespace, "policy", policyName)
+			return admission.Denied(fmt.Sprintf(
+				"PII-Shield strict mode: pod requires PiiPolicy %q in namespace %q, but it was not found",
+				policyName, req.Namespace))
+		}
+		log.Info("permissive mode: skipping injection for pod with no PiiPolicy",
+			"pod", pod.Name, "namespace", req.Namespace, "policy", policyName)
+		resp := admission.Allowed("Policy not found, skipping injection")
+		resp.Warnings = append(resp.Warnings, fmt.Sprintf(
+			"PII-Shield: no PiiPolicy %q found in namespace %q; sidecar NOT injected and logs are NOT redacted. Enable webhook strict mode to deny such pods.",
+			policyName, req.Namespace))
+		return resp
 	}
 
 	targetContainerName := pod.Annotations["pii-shield.io/target-container"]

@@ -57,6 +57,11 @@ webhook:
   useCertManager: true
   # Admission failure behavior. Use Ignore for availability-first rollout, Fail for compliance-sensitive enforcement.
   failurePolicy: Ignore
+  # Strict mode: deny pods that request injection (pii-shield.io/inject: "true")
+  # but have no resolvable PiiPolicy, instead of letting them start unprotected.
+  # For real enforcement, pair strictMode: true with failurePolicy: Fail so the
+  # denial cannot be bypassed when the webhook is unavailable.
+  strictMode: false
 
 podDisruptionBudget:
   enabled: false

@@ -56,6 +56,25 @@ Production recommendation:
 - Start with `Ignore` during controlled rollout.
 - Move to `Fail` only after webhook health alerts, runbooks, and emergency bypass procedures are tested.
 
+## Webhook Strict Mode
+
+`webhook.strictMode` controls what the webhook does when a pod requests injection
+(`pii-shield.io/inject: "true"`) but no matching `PiiPolicy` can be resolved.
+
+| Value | Behavior | Use case |
+| --- | --- | --- |
+| `false` (default) | The pod is admitted **without** a sidecar, and the admission response carries a warning that logs are not redacted. Preserves current compatibility. | Availability-first rollout and early adoption. |
+| `true` | The pod is **denied** until a `PiiPolicy` exists, so no unprotected workload starts. | Compliance-sensitive enforcement. |
+
+`failurePolicy` and `strictMode` are independent but complementary. `strictMode`
+only takes effect when the webhook actually runs; if the webhook is unavailable,
+`failurePolicy: Ignore` still lets pods through. For real enforcement, pair
+**`strictMode: true` with `failurePolicy: Fail`** so a pod cannot bypass the
+policy requirement either by missing policy or by an unavailable webhook.
+
+Skipped and denied injections are logged by the operator and surfaced as
+admission warnings/messages, so they are visible in `kubectl` output and events.
+
 ## CRD Upgrade Safety
 
 Before upgrading CRDs:

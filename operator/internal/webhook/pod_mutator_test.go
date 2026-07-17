@@ -195,6 +195,86 @@ func TestHandlePipeModeReturnsExperimentalWarning(t *testing.T) {
 	assert.Contains(t, resp.Warnings[0], "/bin/sh -c")
 }
 
+// handleInjectPod builds an admission request for a pod that requests injection
+// but for which the given mutator's client has no matching PiiPolicy (unless one
+// is seeded). Used by the strict-mode tests below.
+func handleForMissingPolicy(t *testing.T, mutator *PodMutator) admission.Response {
+	t.Helper()
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "app",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"pii-shield.io/inject": "true"},
+		},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+	}
+	raw, err := json.Marshal(pod)
+	assert.NoError(t, err)
+	return mutator.Handle(context.Background(), admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Namespace: "test-ns",
+			Object:    runtime.RawExtension{Raw: raw},
+		},
+	})
+}
+
+func newEmptyMutator(t *testing.T) *PodMutator {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	assert.NoError(t, corev1.AddToScheme(scheme))
+	assert.NoError(t, piishieldv1alpha1.AddToScheme(scheme))
+	return &PodMutator{
+		Client:  fake.NewClientBuilder().WithScheme(scheme).Build(),
+		Decoder: admission.NewDecoder(scheme),
+	}
+}
+
+func TestHandleMissingPolicyPermissiveAllowsWithWarning(t *testing.T) {
+	m := newEmptyMutator(t) // StrictMode defaults to false
+	resp := handleForMissingPolicy(t, m)
+
+	assert.True(t, resp.Allowed, "permissive mode should allow the pod")
+	assert.Empty(t, resp.Patches, "no sidecar should be injected")
+	assert.Len(t, resp.Warnings, 1)
+	assert.Contains(t, resp.Warnings[0], "NOT injected")
+}
+
+func TestHandleMissingPolicyStrictDenies(t *testing.T) {
+	m := newEmptyMutator(t)
+	m.StrictMode = true
+	resp := handleForMissingPolicy(t, m)
+
+	assert.False(t, resp.Allowed, "strict mode should deny the pod")
+	assert.Contains(t, resp.Result.Message, "strict mode")
+	assert.Contains(t, resp.Result.Message, "not found")
+}
+
+func TestHandleStrictModeEnvOverridesField(t *testing.T) {
+	// STRICT_MODE env is authoritative even when the struct field is false.
+	t.Setenv("STRICT_MODE", "true")
+	m := newEmptyMutator(t) // field false
+	resp := handleForMissingPolicy(t, m)
+	assert.False(t, resp.Allowed, "STRICT_MODE=true env should force denial")
+}
+
+func TestHandleInvalidInjectionModeErrors(t *testing.T) {
+	scheme := runtime.NewScheme()
+	assert.NoError(t, corev1.AddToScheme(scheme))
+	assert.NoError(t, piishieldv1alpha1.AddToScheme(scheme))
+	policy := &piishieldv1alpha1.PiiPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "default", Namespace: "test-ns"},
+		Spec:       piishieldv1alpha1.PiiPolicySpec{InjectionMode: "bogus"},
+	}
+	m := &PodMutator{
+		Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(policy).Build(),
+		Decoder: admission.NewDecoder(scheme),
+	}
+	resp := handleForMissingPolicy(t, m) // policy exists, but mode is invalid
+
+	assert.False(t, resp.Allowed, "an unknown injection mode should not be allowed")
+	assert.Contains(t, resp.Result.Message, "unknown injection mode")
+}
+
 func TestBuildSidecarPassesScannerEnv(t *testing.T) {
 	policy := &piishieldv1alpha1.PiiPolicy{
 		Spec: piishieldv1alpha1.PiiPolicySpec{
