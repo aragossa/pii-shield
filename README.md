@@ -161,6 +161,8 @@ The Operator will automatically inject the `pii-shield-agent` using the Native S
 
 📦 **Compliance Packs (GDPR/HIPAA/PCI) coming soon** — [get early access →](https://pii-shield.com/#waitlist)
 
+💬 **Using PII-Shield?** [Tell us about your deployment →](https://tally.so/r/Gx4WoZ) — 2 minutes, and it shapes what gets built next.
+
 ## Verification
 This project is verified with a growing testing suite intended to raise confidence before production hardening:
 1. **Unit Tests**: Cover edge cases, multilingual support, and JSON integrity with >85% coverage.
