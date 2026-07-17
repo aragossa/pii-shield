@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 # Build statically linked binary
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o pii-shield ./cmd/cleaner/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o pii-shield ./cmd/cleaner
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
