@@ -155,6 +155,12 @@ spec:
 
 The Operator will automatically inject the `pii-shield-agent` using the Native Sidecar pattern (K8s 1.28+) and securely mask all logs!
 
+---
+
+📋 **Free: 25-point Kubernetes Log PII Audit Checklist** — where PII leaks from pods, which log paths bypass your filters, and how to verify redaction actually works. [Get the checklist →](https://pii-shield.com/#checklist)
+
+📦 **Compliance Packs (GDPR/HIPAA/PCI) coming soon** — [get early access →](https://pii-shield.com/#waitlist)
+
 ## Verification
 This project is verified with a growing testing suite intended to raise confidence before production hardening:
 1. **Unit Tests**: Cover edge cases, multilingual support, and JSON integrity with >85% coverage.
