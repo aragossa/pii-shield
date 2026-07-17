@@ -18,6 +18,12 @@ class PiiShieldConfig:
     disable_bigram_check: Optional[bool] = None
     # Enable experimental statistical adaptive-threshold mode.
     adaptive_threshold: Optional[bool] = None
+    # Regex patterns matched against key names to detect sensitive keys.
+    sensitive_key_patterns: Optional[List[str]] = None
+    # Custom rules forcing redaction: [{"pattern": ..., "name": ...}].
+    custom_regexes: Optional[List[dict]] = None
+    # Whitelist rules exempting matching tokens: [{"pattern": ..., "name": ...}].
+    safe_regexes: Optional[List[dict]] = None
 
 class PiiShield:
     def __init__(self, config: PiiShieldConfig = None, wasm_path: str = None):
@@ -73,6 +79,12 @@ class PiiShield:
             cfg_dict["disable_bigram_check"] = self.config.disable_bigram_check
         if self.config.adaptive_threshold is not None:
             cfg_dict["adaptive_threshold"] = self.config.adaptive_threshold
+        if self.config.sensitive_key_patterns is not None:
+            cfg_dict["sensitive_key_patterns"] = self.config.sensitive_key_patterns
+        if self.config.custom_regexes is not None:
+            cfg_dict["custom_regexes"] = self.config.custom_regexes
+        if self.config.safe_regexes is not None:
+            cfg_dict["safe_regexes"] = self.config.safe_regexes
 
         cfg_json = json.dumps(cfg_dict).encode("utf-8")
         if len(cfg_json) > 0:

@@ -40,15 +40,17 @@ the core scanner default, so redaction matches the CLI for the same config.
 | `sensitiveKeys` | string[] | Key names whose values are always redacted (case-insensitive). Replaces the defaults. |
 | `disableBigramCheck` | boolean | Disable English bigram analysis (useful for non-English logs). |
 | `adaptiveThreshold` | boolean | Enable the **experimental** statistical adaptive-threshold mode. |
+| `sensitiveKeyPatterns` | string[] | Regex patterns matched against key names (equivalent to `PII_SENSITIVE_KEY_PATTERNS`). |
+| `customRegexes` | `{pattern, name}[]` | Rules forcing redaction of matching tokens (equivalent to `PII_CUSTOM_REGEX_LIST`). |
+| `safeRegexes` | `{pattern, name}[]` | Whitelist rules exempting matching tokens (equivalent to `PII_SAFE_REGEX_LIST`). |
 | `failPolicy` | `"open"` \| `"closed"` | On an internal error, `open` returns the input unchanged; `closed` returns a drop marker. Handled in this wrapper. |
 
-### Unsupported config fields
+### Invalid regex handling
 
-These core options are **not configurable via the SDK yet** — they require
-compiled state built only in the CLI/env path. Use the CLI or Kubernetes
-deployment if you need them: `sensitiveKeyPatterns`, `customRegexes`,
-`safeRegexes` (env vars `PII_SENSITIVE_KEY_PATTERNS`, `PII_CUSTOM_REGEX_LIST`,
-`PII_SAFE_REGEX_LIST`).
+The CLI fails fast on an invalid pattern at startup. The SDK deliberately does
+**not**: an invalid `sensitiveKeyPatterns`, `customRegexes`, or `safeRegexes`
+entry is ignored and the default is kept, so a bad pattern can never terminate
+your Node process. Validate patterns before passing them if you need strictness.
 
 ## Features
 

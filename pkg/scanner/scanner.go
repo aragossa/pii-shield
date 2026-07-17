@@ -90,15 +90,10 @@ var hmacPool *sync.Pool
 var luhnPool *sync.Pool
 
 func init() {
-	// defaults
-	currentConfig = loadConfig()
-
-	// Initialize HMAC Pool
-	hmacPool = &sync.Pool{
-		New: func() interface{} {
-			return hmac.New(sha256.New, currentConfig.Salt)
-		},
-	}
+	// defaults. UpdateConfig builds every piece of derived state (sensitive key
+	// regex, HMAC pool), so the CLI/env, Go API, and WASM/SDK entrypoints all go
+	// through one path and stay in parity.
+	UpdateConfig(loadConfig())
 
 	// Initialize Luhn Pool (slice of ints)
 	luhnPool = &sync.Pool{
@@ -133,6 +128,101 @@ func envTruthy(s string) bool {
 	default:
 		return false
 	}
+}
+
+// compileSensitiveKeyPatterns builds the combined case-insensitive regex used by
+// isSensitiveKey. It returns (nil, nil) when there is nothing to compile, and
+// never terminates the process so WASM/SDK callers can recover from bad input.
+func compileSensitiveKeyPatterns(patterns []string) (*regexp.Regexp, error) {
+	valid := make([]string, 0, len(patterns))
+	for _, p := range patterns {
+		if cleaned := strings.TrimSpace(p); cleaned != "" {
+			valid = append(valid, cleaned)
+		}
+	}
+	if len(valid) == 0 {
+		return nil, nil
+	}
+	re, err := regexp.Compile("(?i)(" + strings.Join(valid, "|") + ")")
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile combined sensitive key regex: %w", err)
+	}
+	return re, nil
+}
+
+// compileRegexRules compiles raw pattern/name pairs into runtime rules. It
+// returns an error instead of terminating, so an invalid pattern supplied by an
+// SDK caller cannot kill the embedding host process.
+func compileRegexRules(raw []CustomRegexConfig) ([]CustomRegexRule, error) {
+	rules := make([]CustomRegexRule, 0, len(raw))
+	for _, r := range raw {
+		compiled, err := regexp.Compile(r.Pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex %q: %w", r.Pattern, err)
+		}
+		rules = append(rules, CustomRegexRule{Regexp: compiled, Name: r.Name})
+	}
+	return rules, nil
+}
+
+// ApplySensitiveKeyPatterns stores regex patterns for sensitive key detection.
+// The combined regex itself is rebuilt by UpdateConfig, so every entrypoint
+// derives it the same way.
+func (c *Config) ApplySensitiveKeyPatterns(patterns []string) error {
+	cleaned := make([]string, 0, len(patterns))
+	for _, p := range patterns {
+		if t := strings.TrimSpace(p); t != "" {
+			cleaned = append(cleaned, t)
+		}
+	}
+	c.SensitiveKeyPatterns = cleaned
+	_, err := compileSensitiveKeyPatterns(cleaned)
+	return err
+}
+
+// ApplyCustomRegexes compiles custom redaction rules into c, including the
+// combined "mega-regex" fast path. Returns an error for an invalid pattern.
+func (c *Config) ApplyCustomRegexes(raw []CustomRegexConfig) error {
+	rules, err := compileRegexRules(raw)
+	if err != nil {
+		return fmt.Errorf("custom regex list: %w", err)
+	}
+	c.CustomRegexes = rules
+
+	if len(raw) == 0 {
+		c.CombinedCustomRegex = nil
+		c.CustomRegexNames = nil
+		return nil
+	}
+
+	patterns := make([]string, 0, len(raw))
+	names := make([]string, 0, len(raw))
+	for _, r := range raw {
+		// Each rule is wrapped in a capturing group to identify which matched.
+		patterns = append(patterns, "("+r.Pattern+")")
+		names = append(names, r.Name)
+	}
+	combined, err := regexp.Compile(strings.Join(patterns, "|"))
+	if err != nil {
+		// Fall back to the individual rules, matching prior behavior.
+		log.Printf("WARNING: Failed to compile combined custom regex: %v. Fallback to individual checks.", err)
+		c.CombinedCustomRegex = nil
+		c.CustomRegexNames = nil
+		return nil
+	}
+	c.CombinedCustomRegex = combined
+	c.CustomRegexNames = names
+	return nil
+}
+
+// ApplySafeRegexes compiles whitelist rules into c.
+func (c *Config) ApplySafeRegexes(raw []CustomRegexConfig) error {
+	rules, err := compileRegexRules(raw)
+	if err != nil {
+		return fmt.Errorf("safe regex list: %w", err)
+	}
+	c.SafeRegexes = rules
+	return nil
 }
 
 // DefaultConfig returns the built-in defaults (no env vars, no salt). Embedders
@@ -233,72 +323,23 @@ func loadConfig() Config {
 		}
 	}
 
-	// Load Sensitive Key Patterns (regex)
+	// Load Sensitive Key Patterns (regex). The combined regex is compiled by
+	// UpdateConfig; a bad pattern warns rather than exits, as before.
 	if envPatterns := os.Getenv("PII_SENSITIVE_KEY_PATTERNS"); envPatterns != "" {
-		cfg.SensitiveKeyPatterns = strings.Split(envPatterns, ",")
-		var validPatterns []string
-		for i, p := range cfg.SensitiveKeyPatterns {
-			cleaned := strings.TrimSpace(p)
-			cfg.SensitiveKeyPatterns[i] = cleaned
-			if cleaned != "" {
-				validPatterns = append(validPatterns, cleaned)
-			}
-		}
-
-		if len(validPatterns) > 0 {
-			// Combine all patterns into one: (?i)(pat1|pat2|...)
-			combined := "(?i)(" + strings.Join(validPatterns, "|") + ")"
-			if re, err := regexp.Compile(combined); err == nil {
-				sensitiveRegex = re
-			} else {
-				fmt.Fprintf(os.Stderr, "WARNING: Failed to compile combined sensitive key regex: %v\n", err)
-			}
+		if err := cfg.ApplySensitiveKeyPatterns(strings.Split(envPatterns, ",")); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: %v\n", err)
 		}
 	}
 
-	// Load Custom Regex List
+	// Load Custom Regex List. The CLI keeps its fail-fast behavior by turning a
+	// compile error from the shared helper into a fatal error here.
 	if envCustomRegex := os.Getenv("PII_CUSTOM_REGEX_LIST"); envCustomRegex != "" {
 		var rawRules []CustomRegexConfig
 		if err := json.Unmarshal([]byte(envCustomRegex), &rawRules); err != nil {
 			log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid json format: %v", err)
 		}
-
-		var patterns []string
-		var names []string
-
-		for _, rule := range rawRules {
-			// Validate regex individually first
-			if _, err := regexp.Compile(rule.Pattern); err != nil {
-				log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid regex '%s': %v", rule.Pattern, err)
-			}
-
-			// Add to combined list - wrapped in capturing group to identify which one matched
-			patterns = append(patterns, "("+rule.Pattern+")")
-			names = append(names, rule.Name)
-
-			// Keep individual rules for backward compatibility (or remove if fully fully switched)
-			// processSingleToken uses CombinedCustomRegex now.
-			// existing tests might check cfg.CustomRegexes?
-			// Let's populate it just in case, or leave it empty?
-			// To be safe and cleaner, we remove the loop over CustomRegexes in processSingleToken.
-			// But Config struct still has CustomRegexes field. Let's populate it to be safe.
-			compiled, _ := regexp.Compile(rule.Pattern)
-			cfg.CustomRegexes = append(cfg.CustomRegexes, CustomRegexRule{
-				Regexp: compiled,
-				Name:   rule.Name,
-			})
-		}
-
-		if len(patterns) > 0 {
-			combined := strings.Join(patterns, "|")
-			compiled, err := regexp.Compile(combined)
-			if err != nil {
-				log.Printf("WARNING: Failed to compile combined custom regex: %v. Fallback to individual checks.", err)
-				cfg.CombinedCustomRegex = nil
-			} else {
-				cfg.CombinedCustomRegex = compiled
-				cfg.CustomRegexNames = names
-			}
+		if err := cfg.ApplyCustomRegexes(rawRules); err != nil {
+			log.Fatalf("PII_CUSTOM_REGEX_LIST error: %v", err)
 		}
 	}
 
@@ -308,16 +349,8 @@ func loadConfig() Config {
 		if err := json.Unmarshal([]byte(envSafeRegex), &rawRules); err != nil {
 			log.Fatalf("PII_SAFE_REGEX_LIST error: invalid json format: %v", err)
 		}
-
-		for _, rule := range rawRules {
-			compiled, err := regexp.Compile(rule.Pattern)
-			if err != nil {
-				log.Fatalf("PII_SAFE_REGEX_LIST error: invalid regex '%s': %v", rule.Pattern, err)
-			}
-			cfg.SafeRegexes = append(cfg.SafeRegexes, CustomRegexRule{
-				Regexp: compiled,
-				Name:   rule.Name,
-			})
+		if err := cfg.ApplySafeRegexes(rawRules); err != nil {
+			log.Fatalf("PII_SAFE_REGEX_LIST error: %v", err)
 		}
 	}
 
@@ -328,6 +361,16 @@ func loadConfig() Config {
 // This is primarily used for WASM environments where config is dynamic.
 func UpdateConfig(cfg Config) {
 	currentConfig = cfg
+
+	// Rebuild derived state from the raw config fields. Doing this here (rather
+	// than only while parsing env vars) is what lets the WASM/SDK entrypoints
+	// honor SensitiveKeyPatterns exactly like the CLI does.
+	re, err := compileSensitiveKeyPatterns(cfg.SensitiveKeyPatterns)
+	if err != nil {
+		log.Printf("WARNING: %v", err)
+		re = nil
+	}
+	sensitiveRegex = re
 
 	// Re-initialize HMAC Pool with new salt
 	hmacPool = &sync.Pool{

@@ -13,6 +13,9 @@ const SNAKE_TO_CAMEL = {
     sensitive_keys: 'sensitiveKeys',
     disable_bigram_check: 'disableBigramCheck',
     adaptive_threshold: 'adaptiveThreshold',
+    sensitive_key_patterns: 'sensitiveKeyPatterns',
+    custom_regexes: 'customRegexes',
+    safe_regexes: 'safeRegexes',
 };
 
 async function runParity() {

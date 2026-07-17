@@ -30,5 +30,42 @@
     },
     "input": "ref A1b2C3d4E5f6G7h8x9K0mN random tail",
     "expected": "ref A1b2C3d4E5f6G7h8x9K0mN random tail"
+  },
+  {
+    "name": "sensitive_key_patterns",
+    "config": {
+      "sensitive_key_patterns": [
+        "^cust_.*"
+      ]
+    },
+    "input": "cust_field=hello plain=world",
+    "expected": "cust_field=[HIDDEN:b014e4] plain=world"
+  },
+  {
+    "name": "custom_regexes",
+    "config": {
+      "custom_regexes": [
+        {
+          "name": "TX",
+          "pattern": "TX-\\d{5}"
+        }
+      ]
+    },
+    "input": "order TX-12345 shipped",
+    "expected": "order [HIDDEN:TX:2f68d5] shipped"
+  },
+  {
+    "name": "safe_regexes_whitelist",
+    "config": {
+      "safe_regexes": [
+        {
+          "name": "safe",
+          "pattern": "^A1b2.*"
+        }
+      ],
+      "salt": "parity-fixed-salt-01234567"
+    },
+    "input": "ref A1b2C3d4E5f6G7h8x9K0mN random tail",
+    "expected": "ref A1b2C3d4E5f6G7h8x9K0mN random tail"
   }
 ]
