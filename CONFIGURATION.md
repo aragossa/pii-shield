@@ -40,6 +40,17 @@ Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail ins
 
 See `docs/sidecar-failure-modes.md` for production failure-mode guidance.
 
+## Observability
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PII_METRICS_ENABLED` | Expose a Prometheus `/metrics` endpoint and a `/healthz` probe. | `false` |
+| `PII_METRICS_PORT` | Port for the metrics/health server (1–65535). | `9090` |
+| `PII_STATS_LOG_INTERVAL` | When set to a positive Go duration (e.g. `1h`, `30m`), log a periodic aggregated redaction summary — counts of high-entropy secrets, pattern matches, and card numbers, plus lines and bytes processed — and a final summary on shutdown. Empty or invalid disables it. Independent of `PII_METRICS_ENABLED`. | _(disabled)_ |
+
+The stats summary is a single log line per interval, e.g.
+`PII-Shield stats: 1,240 redactions (900 high-entropy secrets, 297 pattern matches, 43 card numbers) across 12,345 lines / 5.2 MB processed`.
+
 ## Value-Based Regex Redaction (Deterministic)
 
 | Variable | Description |
