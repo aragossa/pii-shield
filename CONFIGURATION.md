@@ -19,8 +19,9 @@ Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail ins
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PII_ENTROPY_THRESHOLD` | Shannon entropy threshold (3.0 - 8.0). Higher = fewer false positives, but might miss simple passwords. | `3.6` |
+| `PII_CONFIDENCE_THRESHOLD` | Multiplier applied to the effective entropy threshold. Values above `1.2` also restrict credit-card (Luhn) matches to lines containing card context words (`card`, `cc`, `pan`, `visa`). | `1.0` |
 | `PII_MIN_SECRET_LENGTH` | Minimum length of a string to be considered a candidate token. | `6` |
-| `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive). | `password,secret,token,key,api_key,aws_access_key_id,aws_secret_access_key,gcp_credentials,slack_token...` |
+| `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive, substring match). **Replaces** the default list instead of extending it. | `pass,secret,token,key,cvv,cvc,auth,sign,password,passwd,api_key,apikey,access_token,client_secret,aws_access_key_id,aws_secret_access_key,gcp_credentials,slack_token` |
 | `PII_SENSITIVE_KEY_PATTERNS` | Comma-separated list of regex patterns for key detection. | (empty) |
 
 ## Advanced Features
@@ -56,6 +57,9 @@ The stats summary is a single log line per interval, e.g.
 | Variable | Description |
 |----------|-------------|
 | `PII_CUSTOM_REGEX_LIST` | JSON array of regex objects to enforce redaction regardless of entropy. Supports named placeholders. |
+
+> [!WARNING]
+> **Fatal on invalid input:** malformed JSON or an invalid regex pattern in `PII_CUSTOM_REGEX_LIST` or `PII_SAFE_REGEX_LIST` terminates the process at startup, before any log line is processed. In a sidecar this shows up as a crash loop. Validate the JSON and every pattern before rollout.
 
 ### Example
 

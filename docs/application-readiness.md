@@ -31,7 +31,7 @@ For deployment-mode adoption gates, see `docs/production-adoption-checklist.md`.
 
 Prerequisites:
 
-- Go 1.22 or newer for normal development.
+- Go 1.26 or newer for normal development (the authoritative toolchain version is `go.mod`).
 - Helm for chart validation.
 - Docker with Buildx for container image validation.
 - Minikube or Kind for local Kubernetes validation.
@@ -56,14 +56,14 @@ go test -v -race -coverprofile=cover.out ./...
 Official images are published to Docker Hub and GitHub Container Registry. The current README documents:
 
 ```bash
-docker pull thelisdeep/pii-shield:v2.0.5
-docker pull ghcr.io/pii-shield/pii-shield:v2.0.5
+docker pull thelisdeep/pii-shield:2.1.1
+docker pull ghcr.io/pii-shield/pii-shield:2.1.1
 ```
 
 Smoke test example:
 
 ```bash
-echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/pii-shield/pii-shield:v2.0.5
+echo "Error: User password=MySecretPass123! failed login" | docker run -i --rm ghcr.io/pii-shield/pii-shield:2.1.1
 ```
 
 ### Kubernetes And Helm

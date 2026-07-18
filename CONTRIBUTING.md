@@ -22,7 +22,7 @@ Acceptable contributions should:
 
 ## Prerequisites
 You will need the following tools:
-- **Go** (version 1.22+)
+- **Go** (version 1.26+, matching `go.mod`)
 - **Minikube** or **Kind**
 - **Helm**
 
