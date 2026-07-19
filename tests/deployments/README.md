@@ -4,7 +4,7 @@ Each deployment path has its own folder with a focused `run.sh`.
 
 Shared utilities live in `shared/`:
 
-- `shared/replay-image`: local replay app image that bakes in the resolved `access.log` fixture (default `notes/log_example/access.log`, overridable with `PII_SHIELD_ACCESS_LOG`).
+- `shared/replay-image`: local replay app image that bakes in the resolved `access.log` fixture. Set `PII_SHIELD_ACCESS_LOG` to the path of a local representative log file (the fixture is kept outside this repository and is not committed).
 - `shared/scripts/common.sh`: common helpers for fixture checks, image loading, replay pod deployment, log collection, and assertions.
 
 ## Operator paths
@@ -120,7 +120,7 @@ Supported variables for Docker/local-binary paths:
 
 Standalone Helm paths map supported chart variables to `piiConfig.*` and `metrics.*`.
 Node/Python WASM SDK paths map `PII_SALT`, `PII_ENTROPY_THRESHOLD`, `PII_CONFIDENCE_THRESHOLD`, and `PII_FAIL_POLICY`.
-Operator paths currently map only `PII_FAIL_POLICY` to `PiiPolicy.spec.failPolicy`; other scanner env vars are not passed to injected sidecars by the current operator API.
+Operator path scripts currently map only `PII_FAIL_POLICY` to `PiiPolicy.spec.failPolicy`. The operator API itself supports the full scanner configuration surface (salt, thresholds, sensitive keys, regex lists) through `PiiPolicy` fields — see [Scanner Configuration via PiiPolicy](../../operator/README.md#scanner-configuration-via-piipolicy); the test scripts just do not template those fields yet.
 
 ## Prometheus metrics
 

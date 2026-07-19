@@ -44,7 +44,7 @@ Once installed, you can protect any application by applying a `PiiPolicy` and ad
 
    | Mode | Status | Description |
    |------|--------|-------------|
-   | `file` | Stable (default) | The sidecar tails a log file on a shared `emptyDir` volume. Recommended for production. |
+   | `file` | Controlled rollout (default) | The sidecar tails a log file on a shared `emptyDir` volume. The recommended path; gate production use with [docs/production-adoption-checklist.md](../docs/production-adoption-checklist.md). |
    | `pipe` | **Experimental** | Rewrites the target container command through `/bin/sh -c` to redirect output into a named pipe. Can break distroless images (no shell), argument quoting, signal handling, and the app lifecycle. The webhook returns a warning on injection. Not recommended for production. |
    | `ebpf` | Experimental / R&D | Kernel-level interception prototype. Not production-ready. |
 
@@ -154,7 +154,7 @@ If you want to contribute to the Operator:
 > The Kustomize and `make deploy` paths in this directory are for local development, CRD generation, and manual validation of the operator source tree. For user-facing v2.x installs, use the Helm chart.
 
 ### Prerequisites
-- Go version v1.24+
+- Go version 1.26+ (matching the repository `go.mod`)
 - Docker version 17.03+
 - kubectl and access to a K8s cluster (e.g. Minikube)
 
