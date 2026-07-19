@@ -21,6 +21,7 @@ function cleanup {
   # Clean up dangling resources from 'make deploy' or Kustomize
   kubectl delete secret pii-shield-operator-webhook-server-cert -n ${OPERATOR_NAMESPACE} --ignore-not-found 2>/dev/null || true
   kubectl delete mutatingwebhookconfiguration pii-shield-operator-mutating-webhook-configuration operator-mutating-webhook-configuration --ignore-not-found 2>/dev/null || true
+  kubectl label namespace ${APP_NAMESPACE} pii-shield.io/injection- 2>/dev/null || true
 }
 
 # Always clean up on exit (success or failure)
@@ -74,6 +75,12 @@ spec:
   injectionMode: "file"
   logPath: "/var/log/app/log.txt"
 EOF
+
+# Opt the target namespace into injection. The mutating webhook has a
+# namespaceSelector of pii-shield.io/injection=enabled, so without this label the
+# webhook never fires on the workload and no sidecar is injected.
+echo "🏷️  Labeling namespace ${APP_NAMESPACE} for injection..."
+kubectl label namespace ${APP_NAMESPACE} pii-shield.io/injection=enabled --overwrite
 
 # Wait a moment for webhook caches to sync
 sleep 2
