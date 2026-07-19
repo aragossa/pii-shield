@@ -1007,8 +1007,13 @@ func processEqualPair(rawToken string, forcedSensitive bool, overrideSensitivity
 	if idx == -1 {
 		return false, false
 	}
-	// Handle quoted strings: "key=value"
-	if strings.HasPrefix(rawToken, "\"") || strings.HasPrefix(rawToken, "'") {
+	// Handle quoted strings: "key=value". Require a *matching* closing quote —
+	// entering this branch on a leading quote alone re-wraps unbalanced input
+	// and invents quote characters that were not present (B3), e.g.
+	// `data="key=value` -> `data=""key=...`. Unbalanced tokens fall through to
+	// the unquoted branch below.
+	if len(rawToken) >= 2 && (rawToken[0] == '"' || rawToken[0] == '\'') &&
+		rawToken[len(rawToken)-1] == rawToken[0] {
 		quote := string(rawToken[0])
 		trimmed := trimQuotes(rawToken)
 
@@ -1180,39 +1185,43 @@ func maskURLParameters(url string, sb *strings.Builder) {
 		return
 	}
 
-	baseUrl := parts[0]
-	query := parts[1]
+	sb.WriteString(parts[0])
 
-	params := strings.Split(query, "&")
-	sb.WriteString(baseUrl)
-	sb.WriteRune('?')
+	// Everything after the first '?' is query text. A well-formed URL has a
+	// single '?', but malformed log lines can carry several; process each
+	// '?'-separated section through the parameter loop so no bytes are dropped
+	// and secrets in later sections are still scanned/redacted (B2).
+	for _, section := range parts[1:] {
+		sb.WriteRune('?')
 
-	for i, param := range params {
-		if i > 0 {
-			sb.WriteRune('&')
-		}
+		params := strings.Split(section, "&")
+		for i, param := range params {
+			if i > 0 {
+				sb.WriteRune('&')
+			}
 
-		if strings.Contains(param, "=") {
-			kv := strings.SplitN(param, "=", 2)
-			key := kv[0]
-			val := kv[1]
+			if strings.Contains(param, "=") {
+				kv := strings.SplitN(param, "=", 2)
+				key := kv[0]
+				val := kv[1]
 
-			if isSensitiveKey(key) {
-				sb.WriteString(key)
-				sb.WriteRune('=')
-				redactWithHMAC(val, "", "entropy", sb)
-			} else {
-				score := CalculateComplexity(val)
-				if score > currentConfig.EntropyThreshold {
+				if isSensitiveKey(key) {
 					sb.WriteString(key)
 					sb.WriteRune('=')
 					redactWithHMAC(val, "", "entropy", sb)
 				} else {
-					sb.WriteString(param)
+					score := CalculateComplexity(val)
+					if score > currentConfig.EntropyThreshold {
+						sb.WriteString(key)
+						sb.WriteRune('=')
+						redactWithHMAC(val, "", "entropy", sb)
+					} else {
+						sb.WriteString(param)
+					}
 				}
+			} else {
+				sb.WriteString(param)
 			}
-		} else {
-			sb.WriteString(param)
 		}
 	}
 }
@@ -1767,20 +1776,24 @@ func processAndAppend(token string, sb *strings.Builder, state *segmentState) {
 			state.pendingGenericKey = false
 		}
 	} else {
-		// Value Position
-		if state.isInValuePos {
-			state.pendingKeySensitive = false
+		// A non-key token consumes any pending key-sensitivity. Reset it
+		// unconditionally (not only in value position) so a bare sensitive
+		// word in prose — e.g. "password was rejected for user bob" — does not
+		// force-redact the rest of the segment (B1). processTokenLogic above
+		// already read the flag, so the first token after the key is still
+		// redacted (keeping "password hunter2" detection); only later tokens
+		// are freed.
+		state.pendingKeySensitive = false
 
-			// If we were waiting for the value of a Generic Key...
-			if state.pendingGenericKey {
-				// Check if THIS value is a sensitive key name (e.g. "password")
-				// cleanToken is the raw content of the value (e.g. "password")
-				if isSensitiveKey(cleanToken) {
-					// We found {"key": "password"}. The NEXT key-value pair should be sensitive.
-					state.nextValueIsSensitive = true
-				}
-				state.pendingGenericKey = false
+		// If we were waiting for the value of a Generic Key...
+		if state.isInValuePos && state.pendingGenericKey {
+			// Check if THIS value is a sensitive key name (e.g. "password")
+			// cleanToken is the raw content of the value (e.g. "password")
+			if isSensitiveKey(cleanToken) {
+				// We found {"key": "password"}. The NEXT key-value pair should be sensitive.
+				state.nextValueIsSensitive = true
 			}
+			state.pendingGenericKey = false
 		}
 	}
 
