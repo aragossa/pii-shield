@@ -10,7 +10,7 @@ import (
 // TestFalsePositives proves that the Confidence Threshold correctly skips UUIDs and Base64 blobs
 func TestFalsePositives(t *testing.T) {
 	// Preserve global config so we don't break other tests!
-	oldCfg := currentConfig
+	oldCfg := activeCfg()
 	defer UpdateConfig(oldCfg)
 
 	// Apply strict confidence testing config

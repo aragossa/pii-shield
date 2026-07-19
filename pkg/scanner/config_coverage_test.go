@@ -21,7 +21,7 @@ func TestParseHelpers(t *testing.T) {
 
 func TestLoadConfigEdgeCases(t *testing.T) {
 	// Save environment to restore later
-	oldConfig := currentConfig
+	oldConfig := activeCfg()
 	defer UpdateConfig(oldConfig)
 
 	oldSalt := os.Getenv("PII_SALT")

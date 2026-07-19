@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
 )
@@ -49,12 +50,24 @@ type CustomRegexRule struct {
 	Name   string
 }
 
+// configState is the immutable snapshot of everything the scanner reads on the
+// hot path. UpdateConfig publishes a fresh one atomically; readers load the
+// pointer with cfgState(), so a config swap can never race with an in-flight
+// ScanAndRedact call (a reader sees either the whole old snapshot or the whole
+// new one, never a torn mix).
+type configState struct {
+	config         Config
+	sensitiveRegex *regexp.Regexp // compiled sensitive-key patterns, may be nil
+	hmacPool       *sync.Pool     // HMAC hashers keyed by config.Salt
+}
+
+// activeConfig holds the currently published *configState.
+var activeConfig atomic.Pointer[configState]
+
+// cfgState returns the currently published configuration snapshot.
+func cfgState() *configState { return activeConfig.Load() }
+
 var (
-	currentConfig Config
-
-	// Single compiled regex for all sensitive key patterns (case-insensitive)
-	sensitiveRegex *regexp.Regexp
-
 	// UUID regex to skip false positive entropy unless forced
 	uuidRegex = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
@@ -86,7 +99,6 @@ var (
 	MaxMinSecretLength     = 1024
 )
 
-var hmacPool *sync.Pool
 var luhnPool *sync.Pool
 
 func init() {
@@ -360,8 +372,6 @@ func loadConfig() Config {
 // UpdateConfig updates the global configuration and resets the HMAC pool.
 // This is primarily used for WASM environments where config is dynamic.
 func UpdateConfig(cfg Config) {
-	currentConfig = cfg
-
 	// Rebuild derived state from the raw config fields. Doing this here (rather
 	// than only while parsing env vars) is what lets the WASM/SDK entrypoints
 	// honor SensitiveKeyPatterns exactly like the CLI does.
@@ -370,14 +380,24 @@ func UpdateConfig(cfg Config) {
 		log.Printf("WARNING: %v", err)
 		re = nil
 	}
-	sensitiveRegex = re
 
-	// Re-initialize HMAC Pool with new salt
-	hmacPool = &sync.Pool{
+	// HMAC pool keyed by this config's salt. Captured in the closure so it is
+	// bound to the snapshot, not to a shared mutable global.
+	salt := cfg.Salt
+	pool := &sync.Pool{
 		New: func() interface{} {
-			return hmac.New(sha256.New, currentConfig.Salt)
+			return hmac.New(sha256.New, salt)
 		},
 	}
+
+	// Publish the whole snapshot in one atomic store. Readers on the hot path
+	// (cfgState) never observe a partially-updated configuration, so
+	// UpdateConfig is safe to call concurrently with ScanAndRedact.
+	activeConfig.Store(&configState{
+		config:         cfg,
+		sensitiveRegex: re,
+		hmacPool:       pool,
+	})
 }
 
 // -----------------------------------------------------------------------------
@@ -498,7 +518,7 @@ func calculateClassBonus(token string) float64 {
 
 func calculateBigramAdjustment(token string) float64 {
 	// CONDITIONAL: Can be disabled for non-English logs
-	if currentConfig.DisableBigramCheck || len(token) <= 3 {
+	if cfgState().config.DisableBigramCheck || len(token) <= 3 {
 		return 0.0
 	}
 
@@ -532,8 +552,9 @@ func redactWithHMAC(sensitiveData string, name string, strategy string, sb *stri
 		RedactionCallback(strategy)
 	}
 
-	mac := hmacPool.Get().(hash.Hash)
-	defer hmacPool.Put(mac)
+	pool := cfgState().hmacPool
+	mac := pool.Get().(hash.Hash)
+	defer pool.Put(mac)
 
 	mac.Reset()
 	mac.Write([]byte(sensitiveData))
@@ -636,7 +657,7 @@ func scanLine(logLine string, sb *strings.Builder) {
 	luhnRanges := FindLuhnSequences(logLine)
 
 	// Hybrid Validation: Reduce false positive Luhn matches if confidence threshold is strictly elevated
-	if currentConfig.ConfidenceThreshold > 1.2 {
+	if cfgState().config.ConfidenceThreshold > 1.2 {
 		var validLuhns []Range
 		lowerLine := strings.ToLower(logLine)
 		hasContext := strings.Contains(lowerLine, "card") || strings.Contains(lowerLine, "cc") || strings.Contains(lowerLine, "pan") || strings.Contains(lowerLine, "visa")
@@ -839,9 +860,13 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 		return
 	}
 
+	// Load the config snapshot once for the rest of this token's processing so
+	// every field read below comes from the same atomically-published state.
+	cfg := cfgState().config
+
 	// 1. Whitelist Check: Safe Regexes
 	if len(content) >= 3 {
-		for _, rule := range currentConfig.SafeRegexes {
+		for _, rule := range cfg.SafeRegexes {
 			if rule.Regexp.MatchString(content) {
 				sb.WriteString(original)
 				return
@@ -851,15 +876,15 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 
 	// 2. Deterministic Check: Custom Regexes
 	if len(content) >= 5 {
-		if currentConfig.CombinedCustomRegex != nil {
-			loc := currentConfig.CombinedCustomRegex.FindStringSubmatchIndex(content)
+		if cfg.CombinedCustomRegex != nil {
+			loc := cfg.CombinedCustomRegex.FindStringSubmatchIndex(content)
 			if loc != nil {
 				// ... redaction logic ...
 				matchName := ""
-				for i := 0; i < len(currentConfig.CustomRegexNames); i++ {
+				for i := 0; i < len(cfg.CustomRegexNames); i++ {
 					idx := 2 + (i * 2)
 					if idx < len(loc) && loc[idx] != -1 {
-						matchName = currentConfig.CustomRegexNames[i]
+						matchName = cfg.CustomRegexNames[i]
 						break
 					}
 				}
@@ -889,7 +914,7 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 		} else {
 			// ... fallback ...
 			// ... fallback ...
-			for _, rule := range currentConfig.CustomRegexes {
+			for _, rule := range cfg.CustomRegexes {
 				if rule.Regexp.MatchString(content) {
 					// ... redaction ...
 					// ... redaction ...
@@ -921,7 +946,7 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 
 	// 3. Heuristics Check (Length & Spaces)
 	if !forcedSensitive {
-		if len(content) < currentConfig.MinSecretLength {
+		if len(content) < cfg.MinSecretLength {
 			sb.WriteString(original)
 			return
 		}
@@ -957,12 +982,12 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 
 	// 4. Complexity Score
 	score := CalculateComplexity(content)
-	threshold := currentConfig.EntropyThreshold
+	threshold := cfg.EntropyThreshold
 	if forcedSensitive {
 		threshold = 1.0
 	} else if contextSensitive {
 		threshold -= 1.3
-	} else if currentConfig.AdaptiveThreshold {
+	} else if cfg.AdaptiveThreshold {
 		if adaptiveThreshold, ready := globalBaseline.GetThreshold(); ready {
 			threshold = adaptiveThreshold
 		}
@@ -970,7 +995,7 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 
 	// Apply Hybrid Confidence Threshold
 	// High confidence threshold (e.g. 1.2) means the score must exceed baseline * 1.2
-	threshold *= currentConfig.ConfidenceThreshold
+	threshold *= cfg.ConfidenceThreshold
 
 	// If it is explicitly forced by a sensitive key context, we bypass the entropy threshold.
 	if forcedSensitive || score > threshold {
@@ -995,7 +1020,7 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 	}
 
 	// Token SAFE
-	if !forcedSensitive && currentConfig.AdaptiveThreshold {
+	if !forcedSensitive && cfg.AdaptiveThreshold {
 		globalBaseline.Update(score)
 	}
 
@@ -1007,8 +1032,13 @@ func processEqualPair(rawToken string, forcedSensitive bool, overrideSensitivity
 	if idx == -1 {
 		return false, false
 	}
-	// Handle quoted strings: "key=value"
-	if strings.HasPrefix(rawToken, "\"") || strings.HasPrefix(rawToken, "'") {
+	// Handle quoted strings: "key=value". Require a *matching* closing quote —
+	// entering this branch on a leading quote alone re-wraps unbalanced input
+	// and invents quote characters that were not present (B3), e.g.
+	// `data="key=value` -> `data=""key=...`. Unbalanced tokens fall through to
+	// the unquoted branch below.
+	if len(rawToken) >= 2 && (rawToken[0] == '"' || rawToken[0] == '\'') &&
+		rawToken[len(rawToken)-1] == rawToken[0] {
 		quote := string(rawToken[0])
 		trimmed := trimQuotes(rawToken)
 
@@ -1141,10 +1171,11 @@ func isSensitiveKey(key string) bool {
 	// However, if we move ALL keys to regex, that would be fastest.
 	// For now, let's keep the hybrid approach but optimize the Regex part.
 
+	st := cfgState()
 	k := strings.ToLower(key)
 
 	// Check substring matching (backward compatible)
-	for _, sk := range currentConfig.SensitiveKeys {
+	for _, sk := range st.config.SensitiveKeys {
 		if strings.Contains(k, sk) {
 			// Fast reject for 'public_key' or 'pubkey' or 'pub_key'
 			if strings.Contains(k, "pub") && strings.Contains(k, "key") {
@@ -1153,7 +1184,7 @@ func isSensitiveKey(key string) bool {
 
 			// Safety check: High entropy strings (likely secrets) should not be treated as keys
 			// even if they contain the word "secret" or "key".
-			if len(key) > 15 && CalculateComplexity(key) > currentConfig.EntropyThreshold {
+			if len(key) > 15 && CalculateComplexity(key) > st.config.EntropyThreshold {
 				return false
 			}
 			return true
@@ -1164,8 +1195,8 @@ func isSensitiveKey(key string) bool {
 	// sensitiveRegex is already (?i), so we match against original 'key'
 	// to avoid relying on 'k' (result of ToLower) if we want?
 	// Actually 'key' is fine.
-	if sensitiveRegex != nil {
-		if sensitiveRegex.MatchString(key) {
+	if st.sensitiveRegex != nil {
+		if st.sensitiveRegex.MatchString(key) {
 			return true
 		}
 	}
@@ -1180,39 +1211,44 @@ func maskURLParameters(url string, sb *strings.Builder) {
 		return
 	}
 
-	baseUrl := parts[0]
-	query := parts[1]
+	sb.WriteString(parts[0])
+	entropyThreshold := cfgState().config.EntropyThreshold
 
-	params := strings.Split(query, "&")
-	sb.WriteString(baseUrl)
-	sb.WriteRune('?')
+	// Everything after the first '?' is query text. A well-formed URL has a
+	// single '?', but malformed log lines can carry several; process each
+	// '?'-separated section through the parameter loop so no bytes are dropped
+	// and secrets in later sections are still scanned/redacted (B2).
+	for _, section := range parts[1:] {
+		sb.WriteRune('?')
 
-	for i, param := range params {
-		if i > 0 {
-			sb.WriteRune('&')
-		}
+		params := strings.Split(section, "&")
+		for i, param := range params {
+			if i > 0 {
+				sb.WriteRune('&')
+			}
 
-		if strings.Contains(param, "=") {
-			kv := strings.SplitN(param, "=", 2)
-			key := kv[0]
-			val := kv[1]
+			if strings.Contains(param, "=") {
+				kv := strings.SplitN(param, "=", 2)
+				key := kv[0]
+				val := kv[1]
 
-			if isSensitiveKey(key) {
-				sb.WriteString(key)
-				sb.WriteRune('=')
-				redactWithHMAC(val, "", "entropy", sb)
-			} else {
-				score := CalculateComplexity(val)
-				if score > currentConfig.EntropyThreshold {
+				if isSensitiveKey(key) {
 					sb.WriteString(key)
 					sb.WriteRune('=')
 					redactWithHMAC(val, "", "entropy", sb)
 				} else {
-					sb.WriteString(param)
+					score := CalculateComplexity(val)
+					if score > entropyThreshold {
+						sb.WriteString(key)
+						sb.WriteRune('=')
+						redactWithHMAC(val, "", "entropy", sb)
+					} else {
+						sb.WriteString(param)
+					}
 				}
+			} else {
+				sb.WriteString(param)
 			}
-		} else {
-			sb.WriteString(param)
 		}
 	}
 }
@@ -1767,20 +1803,24 @@ func processAndAppend(token string, sb *strings.Builder, state *segmentState) {
 			state.pendingGenericKey = false
 		}
 	} else {
-		// Value Position
-		if state.isInValuePos {
-			state.pendingKeySensitive = false
+		// A non-key token consumes any pending key-sensitivity. Reset it
+		// unconditionally (not only in value position) so a bare sensitive
+		// word in prose — e.g. "password was rejected for user bob" — does not
+		// force-redact the rest of the segment (B1). processTokenLogic above
+		// already read the flag, so the first token after the key is still
+		// redacted (keeping "password hunter2" detection); only later tokens
+		// are freed.
+		state.pendingKeySensitive = false
 
-			// If we were waiting for the value of a Generic Key...
-			if state.pendingGenericKey {
-				// Check if THIS value is a sensitive key name (e.g. "password")
-				// cleanToken is the raw content of the value (e.g. "password")
-				if isSensitiveKey(cleanToken) {
-					// We found {"key": "password"}. The NEXT key-value pair should be sensitive.
-					state.nextValueIsSensitive = true
-				}
-				state.pendingGenericKey = false
+		// If we were waiting for the value of a Generic Key...
+		if state.isInValuePos && state.pendingGenericKey {
+			// Check if THIS value is a sensitive key name (e.g. "password")
+			// cleanToken is the raw content of the value (e.g. "password")
+			if isSensitiveKey(cleanToken) {
+				// We found {"key": "password"}. The NEXT key-value pair should be sensitive.
+				state.nextValueIsSensitive = true
 			}
+			state.pendingGenericKey = false
 		}
 	}
 

@@ -9,10 +9,8 @@ import (
 
 func TestScanner_CustomRegexRedaction(t *testing.T) {
 	// Save original config to restore later
-	originalConfig := currentConfig
-	defer func() {
-		currentConfig = originalConfig
-	}()
+	originalConfig := activeCfg()
+	defer UpdateConfig(originalConfig)
 
 	tests := []struct {
 		name           string
@@ -82,12 +80,11 @@ func TestScanner_CustomRegexRedaction(t *testing.T) {
 				os.Unsetenv("PII_CUSTOM_REGEX_LIST")
 			}
 
-			// Swap global config
-			currentConfig = tConfig
-
-			// Reset entropy threshold to a very high value (100.0) for ALL tests.
-			// This proves that redaction is happening purely due to Regex, not entropy.
-			currentConfig.EntropyThreshold = 100.0
+			// Swap global config. Reset entropy threshold to a very high value
+			// (100.0) for ALL tests. This proves that redaction is happening
+			// purely due to Regex, not entropy.
+			tConfig.EntropyThreshold = 100.0
+			UpdateConfig(tConfig)
 
 			got := ScanAndRedact(tt.input)
 
@@ -128,10 +125,8 @@ func TestScanner_CrashOnInvalidConfig(t *testing.T) {
 }
 
 func TestScanner_SafeRegexWhitelist(t *testing.T) {
-	originalConfig := currentConfig
-	defer func() {
-		currentConfig = originalConfig
-	}()
+	originalConfig := activeCfg()
+	defer UpdateConfig(originalConfig)
 
 	tests := []struct {
 		name           string
@@ -182,12 +177,11 @@ func TestScanner_SafeRegexWhitelist(t *testing.T) {
 				os.Unsetenv("PII_SAFE_REGEX_LIST")
 				os.Unsetenv("PII_CUSTOM_REGEX_LIST")
 			}
-			currentConfig = tConfig
-
 			// Ensure entropy is sensitive enough to catch the "High Entropy" case if whitelist fails
 			if tt.name == "Conflict: Whitelist Wins over High Entropy" {
-				currentConfig.EntropyThreshold = 2.0 // Very sensitive
+				tConfig.EntropyThreshold = 2.0 // Very sensitive
 			}
+			UpdateConfig(tConfig)
 
 			got := ScanAndRedact(tt.input)
 			if got != tt.expectedOutput {

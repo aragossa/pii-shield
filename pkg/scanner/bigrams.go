@@ -66,5 +66,5 @@ func GetBigramProb(b string) float64 {
 	}
 	// Return configured default score instead of hardcoded -7.0
 	// This allows tuning for different language environments
-	return currentConfig.BigramDefaultScore
+	return cfgState().config.BigramDefaultScore
 }

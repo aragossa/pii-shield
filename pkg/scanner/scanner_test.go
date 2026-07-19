@@ -33,8 +33,8 @@ func TestScanner_Multilingual(t *testing.T) {
 	}
 
 	// Disable bigram check for multilingual tests to avoid false positives on non-English text
-	currentConfig.DisableBigramCheck = true
-	defer func() { currentConfig.DisableBigramCheck = false }()
+	applyCfg(func(c *Config) { c.DisableBigramCheck = true })
+	defer applyCfg(func(c *Config) { c.DisableBigramCheck = false })
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -92,16 +92,12 @@ func TestScanner_NegativeCases(t *testing.T) {
 
 	// Ensure default config for this test
 	// SAFE CONFIG MODIFICATION
-	oldThreshold := currentConfig.EntropyThreshold
-	oldMinSecret := currentConfig.MinSecretLength
-
-	currentConfig.EntropyThreshold = DefaultEntropyThreshold
-	currentConfig.MinSecretLength = 6
-
-	defer func() {
-		currentConfig.EntropyThreshold = oldThreshold
-		currentConfig.MinSecretLength = oldMinSecret
-	}()
+	savedCfg := activeCfg()
+	applyCfg(func(c *Config) {
+		c.EntropyThreshold = DefaultEntropyThreshold
+		c.MinSecretLength = 6
+	})
+	defer UpdateConfig(savedCfg)
 
 	// Reset sensitive keys to default for this test to ensure "password" and "key" are caught
 	// (Actual implementation does not expose Reset, but defaults are loaded in init)
