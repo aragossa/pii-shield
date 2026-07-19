@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -23,7 +24,7 @@ func campaignConfig() Config {
 // check that the cascade is broken — later tokens survive — without asserting
 // anything about the single token immediately following the key.
 func TestNoCascadeAfterBareSensitiveWord(t *testing.T) {
-	oldCfg := currentConfig
+	oldCfg := activeCfg()
 	defer UpdateConfig(oldCfg)
 	UpdateConfig(campaignConfig())
 
@@ -57,7 +58,7 @@ func TestNoCascadeAfterBareSensitiveWord(t *testing.T) {
 // drop bytes after a second '?', and a secret in a later section must be
 // redacted in place rather than dropped.
 func TestMaskURLPreservesAllContent(t *testing.T) {
-	oldCfg := currentConfig
+	oldCfg := activeCfg()
 	defer UpdateConfig(oldCfg)
 	UpdateConfig(campaignConfig())
 
@@ -85,7 +86,7 @@ func TestMaskURLPreservesAllContent(t *testing.T) {
 // TestUnbalancedQuoteNotMangled covers B3: the scanner must never invent quote
 // characters that were not in the input.
 func TestUnbalancedQuoteNotMangled(t *testing.T) {
-	oldCfg := currentConfig
+	oldCfg := activeCfg()
 	defer UpdateConfig(oldCfg)
 	UpdateConfig(campaignConfig())
 
@@ -103,4 +104,30 @@ func TestUnbalancedQuoteNotMangled(t *testing.T) {
 	if strings.Contains(out, "hunter2") || strings.Count(out, `"`) != 2 {
 		t.Errorf("balanced quoted case broken: %q", out)
 	}
+}
+
+// TestUpdateConfigConcurrent covers B4: UpdateConfig must be safe to call while
+// other goroutines are scanning. It is meaningful under -race, which the CI and
+// the campaign [T] gate always enable; before the atomic.Pointer snapshot the
+// race detector reported writes in UpdateConfig racing reads in scanLine /
+// isSensitiveKey.
+func TestUpdateConfigConcurrent(t *testing.T) {
+	oldCfg := activeCfg()
+	defer UpdateConfig(oldCfg)
+	UpdateConfig(campaignConfig())
+
+	var wg sync.WaitGroup
+	for g := 0; g < 4; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 200; i++ {
+				ScanAndRedact("password=hunter2 and value AbC9xY2kQ8pLmN0r")
+			}
+		}()
+	}
+	for i := 0; i < 50; i++ {
+		UpdateConfig(campaignConfig())
+	}
+	wg.Wait()
 }

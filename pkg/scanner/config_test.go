@@ -8,7 +8,7 @@ import (
 
 func TestUpdateConfig(t *testing.T) {
 	// Save current config (shallow copy is sufficient as we replace the whole struct)
-	originalConfig := currentConfig
+	originalConfig := activeCfg()
 	defer UpdateConfig(originalConfig)
 
 	// Define two different configurations
@@ -26,8 +26,8 @@ func TestUpdateConfig(t *testing.T) {
 
 	// Helper to calculate HMAC for a given string using the current pool
 	calcHMAC := func(input string) string {
-		h := hmacPool.Get().(hash.Hash)
-		defer hmacPool.Put(h)
+		h := cfgState().hmacPool.Get().(hash.Hash)
+		defer cfgState().hmacPool.Put(h)
 		h.Reset()
 		h.Write([]byte(input))
 		return hex.EncodeToString(h.Sum(nil))
@@ -37,14 +37,14 @@ func TestUpdateConfig(t *testing.T) {
 	UpdateConfig(config1)
 
 	// Verify global state
-	if currentConfig.EntropyThreshold != 4.0 {
-		t.Errorf("Expected EntropyThreshold 4.0, got %f", currentConfig.EntropyThreshold)
+	if activeCfg().EntropyThreshold != 4.0 {
+		t.Errorf("Expected EntropyThreshold 4.0, got %f", activeCfg().EntropyThreshold)
 	}
-	if currentConfig.MinSecretLength != 8 {
-		t.Errorf("Expected MinSecretLength 8, got %d", currentConfig.MinSecretLength)
+	if activeCfg().MinSecretLength != 8 {
+		t.Errorf("Expected MinSecretLength 8, got %d", activeCfg().MinSecretLength)
 	}
-	if string(currentConfig.Salt) != "salt_one_12345678" {
-		t.Errorf("Expected Salt 'salt_one_12345678', got %s", currentConfig.Salt)
+	if string(activeCfg().Salt) != "salt_one_12345678" {
+		t.Errorf("Expected Salt 'salt_one_12345678', got %s", activeCfg().Salt)
 	}
 
 	// Calculate HMAC with Config 1
@@ -55,14 +55,14 @@ func TestUpdateConfig(t *testing.T) {
 	UpdateConfig(config2)
 
 	// Verify global state updated
-	if currentConfig.EntropyThreshold != 2.5 {
-		t.Errorf("Expected EntropyThreshold 2.5, got %f", currentConfig.EntropyThreshold)
+	if activeCfg().EntropyThreshold != 2.5 {
+		t.Errorf("Expected EntropyThreshold 2.5, got %f", activeCfg().EntropyThreshold)
 	}
-	if currentConfig.MinSecretLength != 4 {
-		t.Errorf("Expected MinSecretLength 4, got %d", currentConfig.MinSecretLength)
+	if activeCfg().MinSecretLength != 4 {
+		t.Errorf("Expected MinSecretLength 4, got %d", activeCfg().MinSecretLength)
 	}
-	if string(currentConfig.Salt) != "salt_two_87654321" {
-		t.Errorf("Expected Salt 'salt_two_87654321', got %s", currentConfig.Salt)
+	if string(activeCfg().Salt) != "salt_two_87654321" {
+		t.Errorf("Expected Salt 'salt_two_87654321', got %s", activeCfg().Salt)
 	}
 
 	// Calculate HMAC with Config 2

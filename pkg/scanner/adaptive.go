@@ -52,7 +52,7 @@ func (bs *BaselineStats) GetThreshold() (float64, bool) {
 	defer bs.mu.RUnlock()
 
 	if !bs.ready {
-		return currentConfig.EntropyThreshold, false
+		return cfgState().config.EntropyThreshold, false
 	}
 
 	// Calculate mean

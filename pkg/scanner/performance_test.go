@@ -1,18 +1,15 @@
 package scanner
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 )
 
-// Helper to reset config for benchmarks (simple simulation)
+// Helper to reset config for benchmarks (simple simulation). UpdateConfig
+// rebuilds the derived state (sensitiveRegex, hmacPool) from these fields.
 func resetConfig() {
-	// Re-load defaults
-	currentConfig = Config{
+	UpdateConfig(Config{
 		EntropyThreshold:        DefaultEntropyThreshold,
 		MinSecretLength:         6,
 		DisableBigramCheck:      false,
@@ -25,15 +22,7 @@ func resetConfig() {
 			"password", "passwd", "api_key", "apikey", "access_token", "client_secret",
 			"aws_access_key_id", "aws_secret_access_key", "gcp_credentials", "slack_token",
 		},
-	}
-	sensitiveRegex = nil
-
-	// Reset HMAC Pool with new salt
-	hmacPool = &sync.Pool{
-		New: func() interface{} {
-			return hmac.New(sha256.New, currentConfig.Salt)
-		},
-	}
+	})
 }
 
 // -----------------------------------------------------------------------------
@@ -59,9 +48,9 @@ func BenchmarkWhitelist_Regex(b *testing.B) {
 	// Configure a Safe Regex
 	safePattern := `^SAFE-ID-\d+$`
 	re := regexp.MustCompile(safePattern)
-	currentConfig.SafeRegexes = []CustomRegexRule{
-		{Regexp: re, Name: "SafeID"},
-	}
+	applyCfg(func(c *Config) {
+		c.SafeRegexes = []CustomRegexRule{{Regexp: re, Name: "SafeID"}}
+	})
 
 	token := "SAFE-ID-987654321"
 
@@ -100,9 +89,12 @@ func BenchmarkBlacklist_Regex(b *testing.B) {
 	resetConfig()
 	// Configure Sensitive Key Patterns
 	// We simulate what loadConfig does: combine into one regex
-	pattern := `(?i)(custom_secret|super_confidential)`
-	re := regexp.MustCompile(pattern)
-	sensitiveRegex = re // Direct assignment for test
+	// Drive the sensitive-key regex through the real config path so it is
+	// published atomically like production (UpdateConfig compiles the patterns
+	// into the combined case-insensitive sensitiveRegex).
+	applyCfg(func(c *Config) {
+		c.SensitiveKeyPatterns = []string{"custom_secret", "super_confidential"}
+	})
 
 	// A key NOT in static list, but matches regex
 	key := "custom_secret"
@@ -124,9 +116,9 @@ func BenchmarkCustomRegex(b *testing.B) {
 	// Configure Custom Regex for redaction (e.g. finding SSNs in values)
 	pattern := `\b\d{3}-\d{2}-\d{4}\b` // SSN-like
 	re := regexp.MustCompile(pattern)
-	currentConfig.CustomRegexes = []CustomRegexRule{
-		{Regexp: re, Name: "SSN"},
-	}
+	applyCfg(func(c *Config) {
+		c.CustomRegexes = []CustomRegexRule{{Regexp: re, Name: "SSN"}}
+	})
 
 	token := "123-45-6789"
 	var sb strings.Builder
@@ -153,8 +145,6 @@ func BenchmarkCustomRegex_5Rules(b *testing.B) {
 		{Regexp: regexp.MustCompile(`\bticket-[a-z0-9]+\b`), Name: "Ticket"},
 		{Regexp: regexp.MustCompile(`\b\d{3}-\d{2}-\d{4}\b`), Name: "SSN"}, // The one that matches
 	}
-	currentConfig.CustomRegexes = rules
-
 	// Simulate Combined Regex Compilation (O(1) Optimization)
 	var patterns []string
 	var names []string
@@ -163,8 +153,11 @@ func BenchmarkCustomRegex_5Rules(b *testing.B) {
 		names = append(names, r.Name)
 	}
 	combined, _ := regexp.Compile(strings.Join(patterns, "|"))
-	currentConfig.CombinedCustomRegex = combined
-	currentConfig.CustomRegexNames = names
+	applyCfg(func(c *Config) {
+		c.CustomRegexes = rules
+		c.CombinedCustomRegex = combined
+		c.CustomRegexNames = names
+	})
 
 	token := "123-45-6789"
 	var sb strings.Builder

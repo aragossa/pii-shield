@@ -33,7 +33,7 @@ func TestCompileSensitiveKeyPatterns(t *testing.T) {
 }
 
 func TestApplySensitiveKeyPatterns(t *testing.T) {
-	originalConfig := currentConfig
+	originalConfig := activeCfg()
 	defer UpdateConfig(originalConfig)
 
 	// Valid: patterns stored, and UpdateConfig derives the live sensitiveRegex.
@@ -91,7 +91,7 @@ func TestApplyCustomRegexes(t *testing.T) {
 }
 
 func TestUpdateConfigInvalidPatternWarnsNotPanics(t *testing.T) {
-	originalConfig := currentConfig
+	originalConfig := activeCfg()
 	defer UpdateConfig(originalConfig)
 
 	// A caller can set SensitiveKeyPatterns directly (bypassing Apply*), so
@@ -101,7 +101,7 @@ func TestUpdateConfigInvalidPatternWarnsNotPanics(t *testing.T) {
 	cfg.Salt = []byte("test-salt-000000000000000")
 	cfg.SensitiveKeyPatterns = []string{"("}
 	UpdateConfig(cfg)
-	if sensitiveRegex != nil {
+	if cfgState().sensitiveRegex != nil {
 		t.Fatal("expected sensitiveRegex to be nil after an invalid pattern")
 	}
 }

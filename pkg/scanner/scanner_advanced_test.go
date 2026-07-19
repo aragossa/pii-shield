@@ -40,16 +40,12 @@ func TestScanner_HighEntropySafeData(t *testing.T) {
 
 	// Ensure default config for this test
 	// SAFE CONFIG MODIFICATION
-	oldThreshold := currentConfig.EntropyThreshold
-	oldMinSecret := currentConfig.MinSecretLength
-
-	currentConfig.EntropyThreshold = 3.8
-	currentConfig.MinSecretLength = 6
-
-	defer func() {
-		currentConfig.EntropyThreshold = oldThreshold
-		currentConfig.MinSecretLength = oldMinSecret
-	}()
+	savedCfg := activeCfg()
+	applyCfg(func(c *Config) {
+		c.EntropyThreshold = 3.8
+		c.MinSecretLength = 6
+	})
+	defer UpdateConfig(savedCfg)
 
 	for _, tt := range safeData {
 		t.Run(tt.name, func(t *testing.T) {
