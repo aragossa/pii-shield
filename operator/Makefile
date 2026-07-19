@@ -68,10 +68,11 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
-# TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
-# The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
-# CertManager is installed by default; skip with:
-# - CERT_MANAGER_INSTALL_SKIP=true
+# The e2e suite lives in tests/run_e2e.sh: it builds the operator and agent
+# images, loads them into the local Kind/minikube cluster, installs the Helm
+# chart (cert-manager disabled), applies a PiiPolicy, and verifies live sidecar
+# redaction plus webhook isolation. setup-test-e2e provisions a Kind cluster and
+# the script is loaded against it via KIND_CLUSTER.
 KIND_CLUSTER ?= operator-test-e2e
 
 .PHONY: setup-test-e2e
@@ -89,8 +90,8 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	esac
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests (tests/run_e2e.sh). Expected an isolated environment using Kind.
+	KIND_CLUSTER=$(KIND_CLUSTER) ./tests/run_e2e.sh
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e
