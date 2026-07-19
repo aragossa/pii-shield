@@ -88,8 +88,10 @@ spec:
               value: {{ .Values.piiConfig.entropyThreshold | quote }}
             - name: PII_MIN_SECRET_LENGTH
               value: {{ .Values.piiConfig.minSecretLength | quote }}
+            {{- if .Values.piiConfig.sensitiveKeys }}
             - name: PII_SENSITIVE_KEYS
               value: {{ .Values.piiConfig.sensitiveKeys | quote }}
+            {{- end }}
             - name: PII_ADAPTIVE_THRESHOLD
               value: {{ .Values.piiConfig.adaptiveThreshold | quote }}
             - name: PII_FAIL_POLICY
