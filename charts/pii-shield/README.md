@@ -52,7 +52,7 @@ You can tune the redaction engine via `values.yaml` under `piiConfig`:
 | `requireStrongSalt` | string | `"false"` | Reject explicitly configured salts shorter than 16 bytes. |
 | `entropyThreshold` | string | `"3.6"` | Shannon entropy cut-off determining what is considered a "secret". |
 | `minSecretLength` | string | `"6"` | Minimum string length to apply entropy checks. |
-| `sensitiveKeys` | string | `"password,secret,token,key,api_key"` | Key names mapped to `key=value` parsers to aggressively redact. |
+| `sensitiveKeys` | string | `""` | Key names whose `key=value` values are always redacted. Empty keeps the scanner's built-in 18-key default; setting it **replaces** that default rather than extending it. |
 | `adaptiveThreshold` | string | `"false"` | Auto-tuning baselines based on standard traffic. |
 | `failPolicy` | string | `"open"` | Runtime failure policy. Use `"open"` to keep log flow alive, or `"closed"` to emit drop markers on processing failure. |
 
