@@ -41,8 +41,12 @@ if command -v minikube &> /dev/null && minikube status &> /dev/null; then
   minikube image load ${OPERATOR_IMAGE}
   minikube image load ${AGENT_IMAGE}
 elif command -v kind &> /dev/null && kind get clusters &> /dev/null; then
-  kind load docker-image ${OPERATOR_IMAGE}
-  kind load docker-image ${AGENT_IMAGE}
+  # Honor KIND_CLUSTER (set by `make test-e2e`) so images land in the cluster
+  # that was provisioned; fall back to kind's default cluster when unset.
+  KIND_NAME_ARGS=()
+  [ -n "${KIND_CLUSTER:-}" ] && KIND_NAME_ARGS=(--name "${KIND_CLUSTER}")
+  kind load docker-image "${KIND_NAME_ARGS[@]}" ${OPERATOR_IMAGE}
+  kind load docker-image "${KIND_NAME_ARGS[@]}" ${AGENT_IMAGE}
 else
   echo "⚠️ Warning: Neither minikube nor kind detected. Assuming images are available."
 fi
