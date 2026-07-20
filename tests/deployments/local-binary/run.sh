@@ -9,7 +9,7 @@ enable_runtime_metrics_by_default
 prepare_pii_env_args
 
 mkdir -p "${repo_root}/bin"
-go build -o "${repo_root}/bin/pii-shield" "${repo_root}/cmd/cleaner/main.go"
+go build -o "${repo_root}/bin/pii-shield" "${repo_root}/cmd/cleaner"
 
 print_runtime_metrics_hint
 env "${pii_process_env_args[@]}" \
