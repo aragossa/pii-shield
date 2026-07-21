@@ -60,7 +60,7 @@ func BenchmarkWhitelist_Regex(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		sb.Reset()
-		processSingleToken(token, token, false, false, false, &sb)
+		cfgState().processSingleToken(token, token, false, false, false, &sb)
 		res := sb.String()
 		if res != token {
 			b.Fatalf("Expected token to be preserved, got %s", res)
@@ -79,7 +79,7 @@ func BenchmarkBlacklist_Static(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if !isSensitiveKey(key) {
+		if !cfgState().isSensitiveKey(key) {
 			b.Fatal("Expected key to be sensitive")
 		}
 	}
@@ -101,7 +101,7 @@ func BenchmarkBlacklist_Regex(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if !isSensitiveKey(key) {
+		if !cfgState().isSensitiveKey(key) {
 			b.Fatalf("Expected key '%s' to be sensitive via regex", key)
 		}
 	}
@@ -127,7 +127,7 @@ func BenchmarkCustomRegex(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		sb.Reset()
-		processSingleToken(token, token, false, false, false, &sb)
+		cfgState().processSingleToken(token, token, false, false, false, &sb)
 		res := sb.String()
 		if res == token {
 			b.Fatalf("Expected redaction for token %s", token)
@@ -166,7 +166,7 @@ func BenchmarkCustomRegex_5Rules(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		sb.Reset()
-		processSingleToken(token, token, false, false, false, &sb)
+		cfgState().processSingleToken(token, token, false, false, false, &sb)
 		res := sb.String()
 		if res == token {
 			b.Fatalf("Expected redaction for token %s", token)

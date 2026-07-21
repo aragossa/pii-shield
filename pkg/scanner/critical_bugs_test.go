@@ -174,12 +174,12 @@ func TestQuoteCharRemainingBranches(t *testing.T) {
 		c.CustomRegexNames = []string{"digits"}
 	})
 	sb.Reset()
-	processSingleToken("123456", `"123456"`, false, false, false, &sb)
+	cfgState().processSingleToken("123456", `"123456"`, false, false, false, &sb)
 	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
 		t.Errorf("CombinedCustomRegex: double-quote not preserved: %q", got)
 	}
 	sb.Reset()
-	processSingleToken("123456", "123456", false, false, true, &sb)
+	cfgState().processSingleToken("123456", "123456", false, false, true, &sb)
 	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
 		t.Errorf("CombinedCustomRegex: autoQuote digit not quoted: %q", got)
 	}
@@ -190,17 +190,17 @@ func TestQuoteCharRemainingBranches(t *testing.T) {
 		c.CombinedCustomRegex = nil
 	})
 	sb.Reset()
-	processSingleToken("123456", `"123456"`, false, false, false, &sb)
+	cfgState().processSingleToken("123456", `"123456"`, false, false, false, &sb)
 	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
 		t.Errorf("fallback: double-quote not preserved: %q", got)
 	}
 	sb.Reset()
-	processSingleToken("123456", `'123456'`, false, false, false, &sb)
+	cfgState().processSingleToken("123456", `'123456'`, false, false, false, &sb)
 	if got := sb.String(); !strings.HasPrefix(got, `'[HIDDEN`) || !strings.HasSuffix(got, `]'`) {
 		t.Errorf("fallback: single-quote not preserved: %q", got)
 	}
 	sb.Reset()
-	processSingleToken("123456", "123456", false, false, true, &sb)
+	cfgState().processSingleToken("123456", "123456", false, false, true, &sb)
 	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
 		t.Errorf("fallback: autoQuote digit not quoted: %q", got)
 	}
@@ -208,7 +208,7 @@ func TestQuoteCharRemainingBranches(t *testing.T) {
 	// Entropy/forced path (block 3): no custom regexes configured.
 	UpdateConfig(campaignConfig())
 	sb.Reset()
-	processSingleToken("999999", "999999", true, false, true, &sb)
+	cfgState().processSingleToken("999999", "999999", true, false, true, &sb)
 	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
 		t.Errorf("entropy: autoQuote digit not quoted: %q", got)
 	}
