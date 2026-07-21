@@ -9,7 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: Test (Root & Operator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run Root Module Tests (Race)
+        run: go test -race ./...
+
+      - name: Run Operator Module Tests (Race)
+        working-directory: operator
+        run: go test -race ./...
+
   goreleaser:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -19,7 +37,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 0
-      
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: 'go.mod'
