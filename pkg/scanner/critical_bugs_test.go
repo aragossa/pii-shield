@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -103,6 +104,113 @@ func TestUnbalancedQuoteNotMangled(t *testing.T) {
 	out := ScanAndRedact(`data="password=hunter2"`)
 	if strings.Contains(out, "hunter2") || strings.Count(out, `"`) != 2 {
 		t.Errorf("balanced quoted case broken: %q", out)
+	}
+}
+
+// TestSingleQuoteRewritePreservesQuoteChar covers B8: a single-quoted value
+// that gets redacted must keep its original quote character. processSingleToken
+// used to always emit `"` regardless of the original quote, so
+// token='abc123def456gh' came back as token="[HIDDEN:...]" — changing the
+// quote count. This is distinct from B3 (invented/dropped quotes).
+func TestSingleQuoteRewritePreservesQuoteChar(t *testing.T) {
+	oldCfg := activeCfg()
+	defer UpdateConfig(oldCfg)
+	UpdateConfig(campaignConfig())
+
+	// Entropy/forced-sensitive path (processSingleToken's main redaction branch).
+	in := `msg='hello world' token='abc123def456gh'`
+	out := ScanAndRedact(in)
+	if strings.Contains(out, "abc123def456gh") {
+		t.Fatalf("secret leaked: %q", out)
+	}
+	if strings.Count(out, `'`) != strings.Count(in, `'`) {
+		t.Errorf("quote character changed: in=%q out=%q", in, out)
+	}
+	if strings.Contains(out, `"`) {
+		t.Errorf("single quote rewritten to double quote: %q", out)
+	}
+
+	// Regression: a double-quoted value still gets double quotes.
+	in2 := `token="abc123def456gh"`
+	out2 := ScanAndRedact(in2)
+	if strings.Count(out2, `"`) != 2 {
+		t.Errorf("double-quoted case broken: %q", out2)
+	}
+
+	// Custom-regex path (processSingleToken's CombinedCustomRegex branch).
+	cfg := campaignConfig()
+	if err := cfg.ApplyCustomRegexes([]CustomRegexConfig{{Pattern: `CUST-\d{4}`, Name: "custom-id"}}); err != nil {
+		t.Fatalf("ApplyCustomRegexes: %v", err)
+	}
+	UpdateConfig(cfg)
+	in3 := `ref='CUST-1234'`
+	out3 := ScanAndRedact(in3)
+	if strings.Contains(out3, "CUST-1234") {
+		t.Fatalf("secret leaked: %q", out3)
+	}
+	if strings.Count(out3, `'`) != 2 || strings.Contains(out3, `"`) {
+		t.Errorf("custom-regex path rewrote quote character: %q", out3)
+	}
+}
+
+// TestQuoteCharRemainingBranches closes the coverage gaps left by the B8 fix
+// in all three processSingleToken redaction paths (CombinedCustomRegex, the
+// CustomRegexes fallback loop, and the entropy/forced path): the
+// double-quote-original branch and the autoQuote (digit/bool/null, no
+// original quote) branch, each only exercised for one quote character by
+// TestSingleQuoteRewritePreservesQuoteChar and TestCustomRegexFallbackPath.
+func TestQuoteCharRemainingBranches(t *testing.T) {
+	oldCfg := activeCfg()
+	defer UpdateConfig(oldCfg)
+
+	digitRule := CustomRegexRule{Regexp: regexp.MustCompile(`^\d{6,}$`), Name: "digits"}
+	var sb strings.Builder
+
+	// CombinedCustomRegex path (block 1): double-quote original, and autoQuote
+	// on a bare digit token with no original quote.
+	applyCfg(func(c *Config) {
+		c.CustomRegexes = []CustomRegexRule{digitRule}
+		c.CombinedCustomRegex = regexp.MustCompile(`(\d{6,})`)
+		c.CustomRegexNames = []string{"digits"}
+	})
+	sb.Reset()
+	processSingleToken("123456", `"123456"`, false, false, false, &sb)
+	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
+		t.Errorf("CombinedCustomRegex: double-quote not preserved: %q", got)
+	}
+	sb.Reset()
+	processSingleToken("123456", "123456", false, false, true, &sb)
+	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
+		t.Errorf("CombinedCustomRegex: autoQuote digit not quoted: %q", got)
+	}
+
+	// Fallback CustomRegexes path (block 2): force CombinedCustomRegex nil.
+	applyCfg(func(c *Config) {
+		c.CustomRegexes = []CustomRegexRule{digitRule}
+		c.CombinedCustomRegex = nil
+	})
+	sb.Reset()
+	processSingleToken("123456", `"123456"`, false, false, false, &sb)
+	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
+		t.Errorf("fallback: double-quote not preserved: %q", got)
+	}
+	sb.Reset()
+	processSingleToken("123456", `'123456'`, false, false, false, &sb)
+	if got := sb.String(); !strings.HasPrefix(got, `'[HIDDEN`) || !strings.HasSuffix(got, `]'`) {
+		t.Errorf("fallback: single-quote not preserved: %q", got)
+	}
+	sb.Reset()
+	processSingleToken("123456", "123456", false, false, true, &sb)
+	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
+		t.Errorf("fallback: autoQuote digit not quoted: %q", got)
+	}
+
+	// Entropy/forced path (block 3): no custom regexes configured.
+	UpdateConfig(campaignConfig())
+	sb.Reset()
+	processSingleToken("999999", "999999", true, false, true, &sb)
+	if got := sb.String(); !strings.HasPrefix(got, `"[HIDDEN`) || !strings.HasSuffix(got, `]"`) {
+		t.Errorf("entropy: autoQuote digit not quoted: %q", got)
 	}
 }
 

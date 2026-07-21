@@ -805,8 +805,6 @@ func processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive b
 		// Optimization Phase 3 Regression Fix:
 		// If we are in a Value position, and the value is a quoted string,
 		// we must "unwrap" it and scan the specific content for embedded secrets
-		// If we are in a Value position, and the value is a quoted string,
-		// we must "unwrap" it and scan the specific content for embedded secrets
 		// (e.g. JSON fields containing long error messages or nested structures).
 		// We only do this if NOT forcedSensitive (if forced, we redact the whole thing anyway).
 		if !forcedSensitive && len(rawToken) >= 2 {
@@ -879,7 +877,6 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 		if cfg.CombinedCustomRegex != nil {
 			loc := cfg.CombinedCustomRegex.FindStringSubmatchIndex(content)
 			if loc != nil {
-				// ... redaction logic ...
 				matchName := ""
 				for i := 0; i < len(cfg.CustomRegexNames); i++ {
 					idx := 2 + (i * 2)
@@ -889,54 +886,54 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 					}
 				}
 
-				needsQuotes := false
-				if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
-					needsQuotes = true
+				quoteChar := byte(0)
+				if strings.HasPrefix(original, "\"") {
+					quoteChar = '"'
+				} else if strings.HasPrefix(original, "'") {
+					quoteChar = '\''
 				} else if autoQuote {
 					lower := strings.ToLower(content)
 					if isDigits(content) || lower == "true" || lower == "false" || lower == "null" {
-						needsQuotes = true
+						quoteChar = '"'
 					}
 				}
 
-				if needsQuotes {
-					sb.WriteRune('"')
+				if quoteChar != 0 {
+					sb.WriteByte(quoteChar)
 				}
 
 				// Use hashed redaction for Custom Regex
 				redactWithHMAC(content, matchName, "regex", sb)
 
-				if needsQuotes {
-					sb.WriteRune('"')
+				if quoteChar != 0 {
+					sb.WriteByte(quoteChar)
 				}
 				return
 			}
 		} else {
-			// ... fallback ...
-			// ... fallback ...
 			for _, rule := range cfg.CustomRegexes {
 				if rule.Regexp.MatchString(content) {
-					// ... redaction ...
-					// ... redaction ...
-					needsQuotes := false
-					if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
-						needsQuotes = true
+					quoteChar := byte(0)
+					if strings.HasPrefix(original, "\"") {
+						quoteChar = '"'
+					} else if strings.HasPrefix(original, "'") {
+						quoteChar = '\''
 					} else if autoQuote {
 						lower := strings.ToLower(content)
 						if isDigits(content) || lower == "true" || lower == "false" || lower == "null" {
-							needsQuotes = true
+							quoteChar = '"'
 						}
 					}
 
-					if needsQuotes {
-						sb.WriteRune('"')
+					if quoteChar != 0 {
+						sb.WriteByte(quoteChar)
 					}
 
 					// Use hashed redaction for Custom Regex
 					redactWithHMAC(content, rule.Name, "regex", sb)
 
-					if needsQuotes {
-						sb.WriteRune('"')
+					if quoteChar != 0 {
+						sb.WriteByte(quoteChar)
 					}
 					return
 				}
@@ -999,22 +996,24 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 
 	// If it is explicitly forced by a sensitive key context, we bypass the entropy threshold.
 	if forcedSensitive || score > threshold {
-		needsQuotes := false
-		if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
-			needsQuotes = true
+		quoteChar := byte(0)
+		if strings.HasPrefix(original, "\"") {
+			quoteChar = '"'
+		} else if strings.HasPrefix(original, "'") {
+			quoteChar = '\''
 		} else if autoQuote {
 			lower := strings.ToLower(content)
 			if isDigits(content) || lower == "true" || lower == "false" || lower == "null" {
-				needsQuotes = true
+				quoteChar = '"'
 			}
 		}
 
-		if needsQuotes {
-			sb.WriteRune('"')
+		if quoteChar != 0 {
+			sb.WriteByte(quoteChar)
 		}
 		redactWithHMAC(content, "", "entropy", sb)
-		if needsQuotes {
-			sb.WriteRune('"')
+		if quoteChar != 0 {
+			sb.WriteByte(quoteChar)
 		}
 		return
 	}
@@ -1122,9 +1121,7 @@ func processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Bui
 				idx = realEnd + 1 + colIdx
 			}
 		} else {
-			// Unbalanced or strict string? Fallback to normal index?
-			// Unbalanced or strict string? Fallback to normal index?
-			// If unbalanced, treat as normal string.
+			// Unbalanced quote: treat as a normal (unquoted) string.
 			idx = strings.IndexByte(rawToken, ':')
 		}
 	} else {

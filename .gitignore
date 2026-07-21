@@ -2,6 +2,7 @@
 # Binaries built by go build or scripts
 /pii-shield
 /cleaner
+/bin/
 *.exe
 *.exe~
 *.dll
