@@ -26,8 +26,92 @@ jobs:
         working-directory: operator
         run: go test -race ./...
 
-  goreleaser:
+      - name: Compile WASM FFI
+        run: GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o pii-shield-wasi.wasm cmd/wasm-ffi/main.go
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: compiled-wasm
+          path: pii-shield-wasi.wasm
+
+  sdk-node:
+    name: Node SDK Tests
     needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '20.x'
+
+      - name: Download WASM artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: compiled-wasm
+          path: .
+
+      - name: Test Node SDK
+        working-directory: sdks/node
+        run: node test.js
+
+  sdk-python:
+    name: Python SDK Tests
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+
+      - name: Download WASM artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: compiled-wasm
+          path: .
+
+      - name: Install dependencies
+        working-directory: sdks/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install wasmtime
+
+      - name: Test Python SDK
+        working-directory: sdks/python
+        run: python test.py
+
+  helm-lint:
+    name: Lint & Verify Helm Charts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310
+
+      - name: Lint Helm Charts
+        run: |
+          helm lint charts/pii-shield
+          helm lint charts/pii-shield-operator
+          helm template charts/pii-shield >/dev/null
+          helm template charts/pii-shield-operator >/dev/null
+          helm template charts/pii-shield-operator \
+            --set webhook.failurePolicy=Fail --set webhook.strictMode=true \
+            | grep -q 'failurePolicy: Fail'
+          helm template charts/pii-shield-operator \
+            --set webhook.strictMode=true \
+            | grep -q 'STRICT_MODE'
+
+      - name: Verify Helm Runtime
+        run: scripts/verify-helm-runtime.sh
+
+  goreleaser:
+    needs: [test, sdk-node, sdk-python, helm-lint]
     runs-on: ubuntu-latest
     permissions:
       contents: write
