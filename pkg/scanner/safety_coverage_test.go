@@ -69,4 +69,31 @@ func TestProcessEqualPairEdgeCases(t *testing.T) {
 	if !handled {
 		t.Errorf("Expected nested assignment to be handled")
 	}
+
+	sb.Reset()
+
+	// Test quoted nested assignment where the value itself contains a further
+	// separator ("data"=key=val): the non-sensitive outer key "data" recurses
+	// into processTokenLogic on "key=val", which redacts "val" because "key"
+	// is a default sensitive key.
+	_, handled = cfgState().processEqualPair(`"data=key=val"`, false, false, &sb)
+	if !handled {
+		t.Errorf("Expected quoted nested assignment to be handled")
+	}
+	if !strings.Contains(sb.String(), "[HIDDEN") {
+		t.Errorf("Expected quoted nested assignment's sensitive value to be redacted, got: %s", sb.String())
+	}
+
+	sb.Reset()
+
+	// Test quoted assignment where the value has no further separator
+	// ("data"=hello): the non-sensitive outer key "data" recurses via
+	// scanLine on the plain value instead.
+	_, handled = cfgState().processEqualPair(`"data=hello"`, false, false, &sb)
+	if !handled {
+		t.Errorf("Expected quoted plain-value assignment to be handled")
+	}
+	if strings.Contains(sb.String(), "[HIDDEN") {
+		t.Errorf("Expected quoted plain-value assignment to pass through unredacted, got: %s", sb.String())
+	}
 }

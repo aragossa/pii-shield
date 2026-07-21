@@ -70,3 +70,28 @@ func TestNewScanner_ImmutableAcrossUpdateConfig(t *testing.T) {
 		t.Fatalf("scanner should still use its own snapshot after a later UpdateConfig, got %q", got)
 	}
 }
+
+// TestCalculateComplexity_PublicWrapper calls the exported CalculateComplexity
+// directly. Internally the engine now calls calculateComplexity on an
+// explicit *configState instead of this wrapper, so nothing else in the
+// suite exercises it by name.
+func TestCalculateComplexity_PublicWrapper(t *testing.T) {
+	if got := CalculateComplexity(""); got != 0 {
+		t.Fatalf("CalculateComplexity(\"\") = %v, want 0", got)
+	}
+	if got := CalculateComplexity("aB3!xQ9zZ"); got <= 0 {
+		t.Fatalf("CalculateComplexity(random) = %v, want > 0", got)
+	}
+}
+
+// TestGetBigramProb_PublicWrapper calls the exported GetBigramProb directly,
+// for the same reason as TestCalculateComplexity_PublicWrapper above.
+func TestGetBigramProb_PublicWrapper(t *testing.T) {
+	if got := GetBigramProb("th"); got != EnglishBigramFreqs["th"] {
+		t.Fatalf("GetBigramProb(%q) = %v, want %v (known bigram)", "th", got, EnglishBigramFreqs["th"])
+	}
+	want := activeCfg().BigramDefaultScore
+	if got := GetBigramProb("9$"); got != want {
+		t.Fatalf("GetBigramProb(unknown bigram) = %v, want configured default %v", got, want)
+	}
+}
