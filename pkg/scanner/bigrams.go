@@ -61,10 +61,17 @@ var EnglishBigramFreqs = map[string]float64{
 // Lower (more negative) values indicate rarer bigrams, which may suggest
 // non-English text or random/encoded data.
 func GetBigramProb(b string) float64 {
+	return cfgState().bigramProb(b)
+}
+
+// bigramProb is GetBigramProb's config-aware implementation, used internally
+// so a Scanner instance's own BigramDefaultScore is honored instead of
+// silently falling back to the package-level default.
+func (st *configState) bigramProb(b string) float64 {
 	if v, ok := EnglishBigramFreqs[b]; ok {
 		return v
 	}
 	// Return configured default score instead of hardcoded -7.0
 	// This allows tuning for different language environments
-	return cfgState().config.BigramDefaultScore
+	return st.config.BigramDefaultScore
 }

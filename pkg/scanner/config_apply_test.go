@@ -46,7 +46,7 @@ func TestApplySensitiveKeyPatterns(t *testing.T) {
 		t.Fatalf("expected trimmed single pattern, got %#v", cfg.SensitiveKeyPatterns)
 	}
 	UpdateConfig(cfg)
-	if !isSensitiveKey("X-Custom-Header") {
+	if !cfgState().isSensitiveKey("X-Custom-Header") {
 		t.Fatal("expected key matching the pattern to be sensitive after UpdateConfig")
 	}
 
