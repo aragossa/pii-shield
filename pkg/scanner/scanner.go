@@ -886,54 +886,54 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 					}
 				}
 
-				needsQuotes := false
-				if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
-					needsQuotes = true
+				quoteChar := byte(0)
+				if strings.HasPrefix(original, "\"") {
+					quoteChar = '"'
+				} else if strings.HasPrefix(original, "'") {
+					quoteChar = '\''
 				} else if autoQuote {
 					lower := strings.ToLower(content)
 					if isDigits(content) || lower == "true" || lower == "false" || lower == "null" {
-						needsQuotes = true
+						quoteChar = '"'
 					}
 				}
 
-				if needsQuotes {
-					sb.WriteRune('"')
+				if quoteChar != 0 {
+					sb.WriteByte(quoteChar)
 				}
 
 				// Use hashed redaction for Custom Regex
 				redactWithHMAC(content, matchName, "regex", sb)
 
-				if needsQuotes {
-					sb.WriteRune('"')
+				if quoteChar != 0 {
+					sb.WriteByte(quoteChar)
 				}
 				return
 			}
 		} else {
-			// ... fallback ...
-			// ... fallback ...
 			for _, rule := range cfg.CustomRegexes {
 				if rule.Regexp.MatchString(content) {
-					// ... redaction ...
-					// ... redaction ...
-					needsQuotes := false
-					if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
-						needsQuotes = true
+					quoteChar := byte(0)
+					if strings.HasPrefix(original, "\"") {
+						quoteChar = '"'
+					} else if strings.HasPrefix(original, "'") {
+						quoteChar = '\''
 					} else if autoQuote {
 						lower := strings.ToLower(content)
 						if isDigits(content) || lower == "true" || lower == "false" || lower == "null" {
-							needsQuotes = true
+							quoteChar = '"'
 						}
 					}
 
-					if needsQuotes {
-						sb.WriteRune('"')
+					if quoteChar != 0 {
+						sb.WriteByte(quoteChar)
 					}
 
 					// Use hashed redaction for Custom Regex
 					redactWithHMAC(content, rule.Name, "regex", sb)
 
-					if needsQuotes {
-						sb.WriteRune('"')
+					if quoteChar != 0 {
+						sb.WriteByte(quoteChar)
 					}
 					return
 				}
@@ -996,22 +996,24 @@ func processSingleToken(content, original string, forcedSensitive bool, contextS
 
 	// If it is explicitly forced by a sensitive key context, we bypass the entropy threshold.
 	if forcedSensitive || score > threshold {
-		needsQuotes := false
-		if strings.HasPrefix(original, "\"") || strings.HasPrefix(original, "'") {
-			needsQuotes = true
+		quoteChar := byte(0)
+		if strings.HasPrefix(original, "\"") {
+			quoteChar = '"'
+		} else if strings.HasPrefix(original, "'") {
+			quoteChar = '\''
 		} else if autoQuote {
 			lower := strings.ToLower(content)
 			if isDigits(content) || lower == "true" || lower == "false" || lower == "null" {
-				needsQuotes = true
+				quoteChar = '"'
 			}
 		}
 
-		if needsQuotes {
-			sb.WriteRune('"')
+		if quoteChar != 0 {
+			sb.WriteByte(quoteChar)
 		}
 		redactWithHMAC(content, "", "entropy", sb)
-		if needsQuotes {
-			sb.WriteRune('"')
+		if quoteChar != 0 {
+			sb.WriteByte(quoteChar)
 		}
 		return
 	}

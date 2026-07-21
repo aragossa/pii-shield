@@ -106,6 +106,52 @@ func TestUnbalancedQuoteNotMangled(t *testing.T) {
 	}
 }
 
+// TestSingleQuoteRewritePreservesQuoteChar covers B8: a single-quoted value
+// that gets redacted must keep its original quote character. processSingleToken
+// used to always emit `"` regardless of the original quote, so
+// token='abc123def456gh' came back as token="[HIDDEN:...]" — changing the
+// quote count. This is distinct from B3 (invented/dropped quotes).
+func TestSingleQuoteRewritePreservesQuoteChar(t *testing.T) {
+	oldCfg := activeCfg()
+	defer UpdateConfig(oldCfg)
+	UpdateConfig(campaignConfig())
+
+	// Entropy/forced-sensitive path (processSingleToken's main redaction branch).
+	in := `msg='hello world' token='abc123def456gh'`
+	out := ScanAndRedact(in)
+	if strings.Contains(out, "abc123def456gh") {
+		t.Fatalf("secret leaked: %q", out)
+	}
+	if strings.Count(out, `'`) != strings.Count(in, `'`) {
+		t.Errorf("quote character changed: in=%q out=%q", in, out)
+	}
+	if strings.Contains(out, `"`) {
+		t.Errorf("single quote rewritten to double quote: %q", out)
+	}
+
+	// Regression: a double-quoted value still gets double quotes.
+	in2 := `token="abc123def456gh"`
+	out2 := ScanAndRedact(in2)
+	if strings.Count(out2, `"`) != 2 {
+		t.Errorf("double-quoted case broken: %q", out2)
+	}
+
+	// Custom-regex path (processSingleToken's CombinedCustomRegex branch).
+	cfg := campaignConfig()
+	if err := cfg.ApplyCustomRegexes([]CustomRegexConfig{{Pattern: `CUST-\d{4}`, Name: "custom-id"}}); err != nil {
+		t.Fatalf("ApplyCustomRegexes: %v", err)
+	}
+	UpdateConfig(cfg)
+	in3 := `ref='CUST-1234'`
+	out3 := ScanAndRedact(in3)
+	if strings.Contains(out3, "CUST-1234") {
+		t.Fatalf("secret leaked: %q", out3)
+	}
+	if strings.Count(out3, `'`) != 2 || strings.Contains(out3, `"`) {
+		t.Errorf("custom-regex path rewrote quote character: %q", out3)
+	}
+}
+
 // TestUpdateConfigConcurrent covers B4: UpdateConfig must be safe to call while
 // other goroutines are scanning. It is meaningful under -race, which the CI and
 // the campaign [T] gate always enable; before the atomic.Pointer snapshot the
