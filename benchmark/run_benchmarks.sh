@@ -124,14 +124,14 @@ echo "   Payload size: ${payload_mb_display} MiB"
 
 echo
 echo "2. Building current branch..."
-"${GO_BIN}" build -o "${new_bin}" ./cmd/cleaner/main.go
+"${GO_BIN}" build -o "${new_bin}" ./cmd/cleaner
 
 echo "3. Building baseline ${BASE_REF}..."
 tmp_baseline_dir="$(mktemp -d)"
 git archive "${base_sha}" | tar -x -C "${tmp_baseline_dir}"
 (
   cd "${tmp_baseline_dir}"
-  "${GO_BIN}" build -o "${old_bin}" ./cmd/cleaner/main.go
+  "${GO_BIN}" build -o "${old_bin}" ./cmd/cleaner
 )
 rm -rf "${tmp_baseline_dir}"
 tmp_baseline_dir=""
