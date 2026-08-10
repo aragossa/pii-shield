@@ -1038,7 +1038,15 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 
 	// Apply Hybrid Confidence Threshold
 	// High confidence threshold (e.g. 1.2) means the score must exceed baseline * 1.2
-	threshold *= cfg.ConfidenceThreshold
+	// A non-positive value has no valid reading as a multiplier (0 collapses every
+	// threshold to 0, a negative flips its sign) - both make score > threshold true
+	// for virtually any token, so every entropy threshold becomes a no-op. This is
+	// reachable via PII_CONFIDENCE_THRESHOLD=0 or a Config{} literal built without
+	// DefaultConfig(); treat it as unset (no scaling) rather than let it defeat the
+	// entropy gate entirely.
+	if cfg.ConfidenceThreshold > 0 {
+		threshold *= cfg.ConfidenceThreshold
+	}
 
 	// If it is explicitly forced by a sensitive key context, we bypass the entropy threshold.
 	if forcedSensitive || score > threshold {

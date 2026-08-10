@@ -214,6 +214,64 @@ func TestQuoteCharRemainingBranches(t *testing.T) {
 	}
 }
 
+// TestZeroConfidenceThresholdDoesNotDefeatEntropyGate covers a bug found
+// 2026-08-10 while prepping the WASM demo: a bare Config{} literal (as
+// opposed to DefaultConfig()) leaves ConfidenceThreshold at its Go zero
+// value, and `threshold *= cfg.ConfidenceThreshold` in processSingleToken
+// then collapses every effective threshold to 0 - so score > threshold is
+// true for virtually any non-empty token and EntropyThreshold becomes
+// completely inert (verified: identical over-redacted output at
+// EntropyThreshold 4.2, 8, 20, and 100). Reachable in production too via
+// PII_CONFIDENCE_THRESHOLD=0.
+func TestZeroConfidenceThresholdDoesNotDefeatEntropyGate(t *testing.T) {
+	oldCfg := activeCfg()
+	defer UpdateConfig(oldCfg)
+
+	cfg := Config{
+		EntropyThreshold: 4.2,
+		Salt:             []byte("0123456789abcdef0123456789abcdef"),
+		// ConfidenceThreshold, MinSecretLength left at zero value on purpose.
+	}
+	UpdateConfig(cfg)
+
+	in := `level=info msg="request completed" status=200 method=GET path=/health`
+	out := ScanAndRedact(in)
+	for _, w := range []string{"level=info", "status=200", "method=GET", "path=/health"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("zero ConfidenceThreshold over-redacted ordinary field: %q missing from %q", w, out)
+		}
+	}
+
+	// Regression: a real secret under a sensitive key must still redact.
+	cfg2 := DefaultConfig()
+	cfg2.Salt = []byte("0123456789abcdef0123456789abcdef")
+	UpdateConfig(cfg2)
+	out2 := ScanAndRedact(`api_key="sk-live-51MzXyExampleKeyValueHere"`)
+	if strings.Contains(out2, "sk-live-51MzXyExampleKeyValueHere") || !strings.Contains(out2, "[HIDDEN") {
+		t.Errorf("key-based detection lost: %q", out2)
+	}
+
+	// Threshold sweep: EntropyThreshold must actually change behavior once
+	// ConfidenceThreshold is a sane positive value (this is what "zero effect"
+	// looked like before the fix).
+	probe := "AbC9xY2kQ8pLmN0r" // no sensitive key context, moderate entropy
+	low := DefaultConfig()
+	low.Salt = []byte("0123456789abcdef0123456789abcdef")
+	low.EntropyThreshold = 1.0
+	UpdateConfig(low)
+	lowOut := ScanAndRedact(probe)
+
+	high := DefaultConfig()
+	high.Salt = []byte("0123456789abcdef0123456789abcdef")
+	high.EntropyThreshold = 100
+	UpdateConfig(high)
+	highOut := ScanAndRedact(probe)
+
+	if lowOut == highOut {
+		t.Errorf("EntropyThreshold had no effect: threshold=1.0 -> %q, threshold=100 -> %q", lowOut, highOut)
+	}
+}
+
 // TestUpdateConfigConcurrent covers B4: UpdateConfig must be safe to call while
 // other goroutines are scanning. It is meaningful under -race, which the CI and
 // the campaign [T] gate always enable; before the atomic.Pointer snapshot the
