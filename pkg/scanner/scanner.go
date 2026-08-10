@@ -722,7 +722,11 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 		}
 
 		secret := logLine[lr.Start:lr.End]
-		st.redactWithHMAC(secret, "", "luhn", sb)
+		if st.isSafeRegexWhitelisted(secret) {
+			sb.WriteString(secret)
+		} else {
+			st.redactWithHMAC(secret, "", "luhn", sb)
+		}
 
 		chunkStart = lr.End
 	}
@@ -847,25 +851,30 @@ func (st *configState) processTokenLogic(rawToken string, forcedSensitive bool, 
 			sb.WriteString(rawToken)
 			return true
 		}
-	} else {
-		// Optimization Phase 3 Regression Fix:
-		// If we are in a Value position, and the value is a quoted string,
-		// we must "unwrap" it and scan the specific content for embedded secrets
-		// (e.g. JSON fields containing long error messages or nested structures).
-		// We only do this if NOT forcedSensitive (if forced, we redact the whole thing anyway).
-		if !forcedSensitive && len(rawToken) >= 2 {
-			first := rawToken[0]
-			last := rawToken[len(rawToken)-1]
-			if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
-				// Write opening quote
-				sb.WriteByte(first)
-				// Recursive scan of the inner content
-				// This handles "Error: 1.2.3.4 failed" by splitting it into tokens
-				st.scanSegment(trimmed, sb)
-				// Write closing quote
-				sb.WriteByte(last)
-				return false
-			}
+	}
+
+	// Optimization Phase 3 Regression Fix / B9: if the token is a genuinely
+	// quoted string, we must "unwrap" it and scan the specific content for
+	// embedded secrets (e.g. JSON fields containing long error messages or
+	// nested structures) instead of scoring the whole quoted blob as one
+	// token. This applies whenever we're about to fall through to "process as
+	// value" below — both when something upstream already knows we're in a
+	// value position, AND when there was no key at all (a bare quoted phrase
+	// at the top level, e.g. "contact alice@example.com" with nothing before
+	// it) — not only the isValuePos==true case. Skipped when forcedSensitive,
+	// since a forced value is redacted as one whole blob regardless.
+	if !forcedSensitive && len(rawToken) >= 2 {
+		first := rawToken[0]
+		last := rawToken[len(rawToken)-1]
+		if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+			// Write opening quote
+			sb.WriteByte(first)
+			// Recursive scan of the inner content
+			// This handles "Error: 1.2.3.4 failed" by splitting it into tokens
+			st.scanSegment(trimmed, sb)
+			// Write closing quote
+			sb.WriteByte(last)
+			return false
 		}
 	}
 
@@ -1194,9 +1203,12 @@ func (st *configState) processColonPair(rawToken string, overrideSensitivity boo
 
 		sb.WriteString(keyRaw) // Write original key (with quotes)
 		sb.WriteRune(':')
-		// Strip quotes for the safety check but keep the quoted form for output;
-		// otherwise compact JSON ("k":"v") hides safe values (timestamps) from isSafe().
-		st.processSingleToken(trimQuotes(val), val, keySensitive, false, false, sb)
+		// Route through processTokenLogic's isValuePos handling instead of
+		// calling processSingleToken directly: a quoted multi-word value (e.g.
+		// compact JSON with no space after ':') must be unwrapped and
+		// re-tokenized so an embedded secret is scored on its own, the same way
+		// it already is when whitespace follows the colon (B9).
+		st.processTokenLogic(val, keySensitive, false, true, false, sb)
 
 		return keySensitive, true
 	}
@@ -1274,7 +1286,9 @@ func (st *configState) maskURLParameters(url string, sb *strings.Builder) {
 				key := kv[0]
 				val := kv[1]
 
-				if st.isSensitiveKey(key) {
+				if st.isSafeRegexWhitelisted(val) {
+					sb.WriteString(param)
+				} else if st.isSensitiveKey(key) {
 					sb.WriteString(key)
 					sb.WriteRune('=')
 					st.redactWithHMAC(val, "", "entropy", sb)
@@ -1298,6 +1312,24 @@ func (st *configState) maskURLParameters(url string, sb *strings.Builder) {
 // -----------------------------------------------------------------------------
 // Safety Whitelists
 // -----------------------------------------------------------------------------
+
+// isSafeRegexWhitelisted reports whether content matches a user-configured
+// PII_SAFE_REGEX_LIST rule. processSingleToken already checks cfg.SafeRegexes
+// on the normal token pipeline; this lets the redaction paths that bypass
+// that pipeline (Luhn card sequences in scanLine, URL query parameters in
+// maskURLParameters) honor the same explicit whitelist instead of silently
+// ignoring it (B10).
+func (st *configState) isSafeRegexWhitelisted(content string) bool {
+	if len(content) < 3 {
+		return false
+	}
+	for _, rule := range st.config.SafeRegexes {
+		if rule.Regexp.MatchString(content) {
+			return true
+		}
+	}
+	return false
+}
 
 func isSafe(token string) bool {
 	// Note: URL check moved up to processTokenLogic to handle masking.

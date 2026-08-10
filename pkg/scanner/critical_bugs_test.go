@@ -239,3 +239,92 @@ func TestUpdateConfigConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestQuotedMultiWordValueRedacted covers B9: a quoted multi-word value must
+// be re-tokenized (so an embedded email/secret is scored on its own) whether
+// or not whitespace follows the ':' that introduces it. Compact JSON
+// (no space after the key's colon) used to leak the whole value verbatim,
+// because processColonPair fed it straight to processSingleToken instead of
+// through processTokenLogic's isValuePos re-tokenize branch. Reported
+// externally by David Youssef (GuardSpine/CodeGuard), 2026-08-06.
+func TestQuotedMultiWordValueRedacted(t *testing.T) {
+	oldCfg := activeCfg()
+	defer UpdateConfig(oldCfg)
+	UpdateConfig(campaignConfig())
+
+	// Previously leaking: compact JSON / bare quoted phrase, no space after ':'.
+	leaky := []string{
+		`"contact alice@example.com"`,
+		`{"m":"contact alice@example.com"}`,
+	}
+	for _, in := range leaky {
+		out := ScanAndRedact(in)
+		if strings.Contains(out, "alice@example.com") {
+			t.Errorf("PII leaked: in=%q out=%q", in, out)
+		}
+		if !strings.Contains(out, "[HIDDEN") {
+			t.Errorf("expected redaction: in=%q out=%q", in, out)
+		}
+	}
+
+	// Regression: shapes that already redacted correctly must keep working.
+	working := []string{
+		`contact alice@example.com`,
+		`{"m":"alice@example.com"}`,
+		`{"m": "contact alice@example.com"}`,
+	}
+	for _, in := range working {
+		out := ScanAndRedact(in)
+		if strings.Contains(out, "alice@example.com") {
+			t.Errorf("regression: PII leaked: in=%q out=%q", in, out)
+		}
+	}
+
+	// Ordinary multi-word text with no PII must not start getting redacted.
+	if out := ScanAndRedact(`{"m": "ok fine"}`); out != `{"m": "ok fine"}` {
+		t.Errorf("over-redaction on benign compact JSON: %q", out)
+	}
+}
+
+// TestSafeRegexWhitelistAppliesToLuhnAndURL covers B10: cfg.SafeRegexes
+// (PII_SAFE_REGEX_LIST) is a no-op for the Luhn credit-card path and the URL
+// query-parameter path. Both call redactWithHMAC directly in scanLine /
+// maskURLParameters without ever consulting the whitelist that
+// processSingleToken checks, so a wildcard safe-regex rule that exempts every
+// other token still leaves these two paths byte-identical to running with no
+// whitelist at all. Reported externally (GuardSpine/CodeGuard integrator,
+// 2026-08).
+func TestSafeRegexWhitelistAppliesToLuhnAndURL(t *testing.T) {
+	oldCfg := activeCfg()
+	defer UpdateConfig(oldCfg)
+
+	wildcard := campaignConfig()
+	if err := wildcard.ApplySafeRegexes([]CustomRegexConfig{{Pattern: ".*", Name: "all"}}); err != nil {
+		t.Fatalf("ApplySafeRegexes: %v", err)
+	}
+
+	// Sanity check: without the whitelist, both paths redact (so a passing
+	// test below is proof the whitelist worked, not that nothing matched).
+	UpdateConfig(campaignConfig())
+	cardBaseline := ScanAndRedact("charge card 4539148803436467 end")
+	if !strings.Contains(cardBaseline, "[HIDDEN") {
+		t.Fatalf("test setup broken: card not redacted without whitelist: %q", cardBaseline)
+	}
+	urlBaseline := ScanAndRedact("GET http://x.com/cb?token=AbC123XyZ987qwerty")
+	if !strings.Contains(urlBaseline, "[HIDDEN") {
+		t.Fatalf("test setup broken: URL param not redacted without whitelist: %q", urlBaseline)
+	}
+
+	// 1. Luhn-valid card number must be exempted by a wildcard whitelist rule.
+	UpdateConfig(wildcard)
+	cardOut := ScanAndRedact("charge card 4539148803436467 end")
+	if strings.Contains(cardOut, "[HIDDEN") {
+		t.Errorf("SafeRegexes did not exempt Luhn match: %q", cardOut)
+	}
+
+	// 2. URL query-parameter secret must be exempted by a wildcard whitelist rule.
+	urlOut := ScanAndRedact("GET http://x.com/cb?token=AbC123XyZ987qwerty")
+	if strings.Contains(urlOut, "[HIDDEN") {
+		t.Errorf("SafeRegexes did not exempt URL param: %q", urlOut)
+	}
+}
