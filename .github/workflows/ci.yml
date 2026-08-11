@@ -14,7 +14,7 @@ jobs:
     name: Version Consistency
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - name: Verify version files match VERSION
       run: scripts/set-version.sh --check
 
@@ -22,7 +22,7 @@ jobs:
     name: Test, Lint & Fuzz
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
     - name: Set up Go
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
@@ -44,7 +44,7 @@ jobs:
       run: go mod verify
 
     - name: Run actionlint
-      uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d
+      uses: reviewdog/action-actionlint@d63ba7532e0942965320cd8d73cbae4c7b3c5283
 
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a
@@ -97,7 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
       with:
         go-version-file: 'go.mod'

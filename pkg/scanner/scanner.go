@@ -1561,7 +1561,11 @@ func FindLuhnSequences(line string) []Range {
 				continue
 			}
 
-			if countDistinctDigits(line, digitIndices[i:i+L]) < 4 {
+			// Guard against degenerate all-same-digit padding (e.g. "0000000000000000",
+			// which is Luhn-valid by construction). Real card numbers, including common
+			// test cards like Visa's 4111111111111111, can have as few as 2 distinct
+			// digits, so the threshold must stay at 2, not higher.
+			if countDistinctDigits(line, digitIndices[i:i+L]) < 2 {
 				continue
 			}
 
