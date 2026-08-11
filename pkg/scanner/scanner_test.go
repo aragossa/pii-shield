@@ -88,8 +88,8 @@ func TestScanner_NegativeCases(t *testing.T) {
 		{"Random Noise", "data=8f7d9a2b3c4e5f6", true},                                                // High entropy hex
 		{"Valid Visa (Luhn)", "cc=4556737586899855", true},                                            // Valid Luhn with enough distinct digits (7 >= 2)
 		{"Stress Test Leak (ccGazanojgGcOSa)", "Error: 192.168.1.5 ccGazanojgGcOSa connection", true}, // Regression test for Threshold 3.6
-		{"Stripe/Visa Test Card (low digit diversity)", "card=4111111111111111", true},               // Regression: only 2 distinct digits (4,1), was wrongly filtered by countDistinctDigits<4
-		{"Mastercard Test Card (low digit diversity)", "card=5555555555554444", true},                // Regression: only 2 distinct digits (5,4)
+		{"Stripe/Visa Test Card (low digit diversity)", "card=4111111111111111", true},                // Regression: only 2 distinct digits (4,1), was wrongly filtered by countDistinctDigits<4
+		{"Mastercard Test Card (low digit diversity)", "card=5555555555554444", true},                 // Regression: only 2 distinct digits (5,4)
 	}
 
 	// Ensure default config for this test
