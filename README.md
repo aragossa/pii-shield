@@ -3,6 +3,8 @@
 **Zero-code log sanitization sidecar for Kubernetes.**
 Prevents data leaks (GDPR/SOC2) by redacting PII from logs *before* they leave the pod.
 
+PII-Shield runs in-process — CLI, sidecar, or WASM. There is no hosted API and no server your data is sent to.
+
 [![Release](https://img.shields.io/badge/release-v2.1.1-blue)](https://github.com/pii-shield/pii-shield/releases/tag/v2.1.1) ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg) ![Docker Pulls](https://img.shields.io/docker/pulls/thelisdeep/pii-shield) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/pii-shield)](https://artifacthub.io/packages/search?repo=pii-shield)<br>
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12945/badge)](https://www.bestpractices.dev/projects/12945) ![Go Report Card](https://goreportcard.com/badge/github.com/pii-shield/pii-shield?v=1) ![Test Coverage](https://github.com/pii-shield/pii-shield/actions/workflows/test.yml/badge.svg) [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors)](https://pii-shield.com/go/sponsors?utm_source=github&utm_medium=readme-badge&utm_campaign=sponsors)
 
@@ -53,11 +55,9 @@ Developers often forget to mask sensitive data. Traditional regex filters in Flu
 We are building a hosted Control Plane with centralized rule management, Slack alerting, and redaction analytics. 
 [![Join the Waitlist](https://img.shields.io/badge/Join_the_Waitlist-PII--Shield_Cloud-blue?style=for-the-badge)](https://tally.so/r/PdY7Ze)
 
-## Trusted By
+## Integrations
 
-**GuardSpine** (AI Governance Kernel) integrated PII-Shield's **In-Process WASM** to sanitize sensitive evidence trails directly within their Node.js and Python agents.
-
-> We chose the WASM architecture to ensure **zero network overhead** and **<1ms latency**. PII-Shield runs directly in-process, preserving the referential integrity of our hash chains while keeping logs compliant.
+PII-Shield's in-process WASM build ships inside [GuardSpine Code](https://github.com/DNYoussef/guardspine-code-action), an open-source AI code-governance GitHub Action, which vendors the binary and credits it in its `NOTICE`.
 
 ## Performance Considerations
 
