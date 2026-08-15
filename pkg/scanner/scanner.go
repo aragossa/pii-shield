@@ -1349,11 +1349,54 @@ func isSafe(token string) bool {
 		return true
 	}
 
-	if isSSHKey(token) || isGeneratedUsername(token) {
+	if isSSHKey(token) || isGeneratedUsername(token) || isPlainDecimal(token) {
 		return true
 	}
 
 	return false
+}
+
+func isPlainDecimal(token string) bool {
+	// Plain decimal number: optional sign, digits, one dot, digits, optional
+	// exponent (6742381.25, -0.5, 6.39426e-05). The dot adds a second
+	// character class, so a full-precision float can cross the entropy
+	// threshold on the class bonus alone; a token of this shape is a
+	// measurement, not a secret. Exponent-only forms without a dot (1e10)
+	// deliberately do not match.
+	s := token
+	if len(s) > 1 && (s[0] == '+' || s[0] == '-') {
+		s = s[1:]
+	}
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 || i >= len(s) || s[i] != '.' {
+		return false
+	}
+	i++
+	fracStart := i
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == fracStart {
+		return false
+	}
+	if i == len(s) {
+		return true
+	}
+	if s[i] != 'e' && s[i] != 'E' {
+		return false
+	}
+	i++
+	if i < len(s) && (s[i] == '+' || s[i] == '-') {
+		i++
+	}
+	expStart := i
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return i > expStart && i == len(s)
 }
 
 func isHexStr(s string) bool {
@@ -1666,6 +1709,12 @@ func isValidBoundary(line string, startIdx, endIdx int) bool {
 				if unicode.IsLetter(r2) {
 					return false
 				}
+				// Decimal check: digits on both sides of a '.' mean the run
+				// is the fractional part of a number (0.6378436834372556),
+				// not a standalone card candidate.
+				if r == '.' && unicode.IsDigit(r2) {
+					return false
+				}
 			}
 		}
 	}
@@ -1679,6 +1728,11 @@ func isValidBoundary(line string, startIdx, endIdx int) bool {
 			if endIdx+1 < len(line) {
 				r2 := rune(line[endIdx+1])
 				if unicode.IsLetter(r2) {
+					return false
+				}
+				// Decimal check: run followed by '.<digit>' is the integer
+				// part of a number (6378436834372556.25), not a card.
+				if r == '.' && unicode.IsDigit(r2) {
 					return false
 				}
 			}
