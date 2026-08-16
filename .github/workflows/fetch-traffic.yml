@@ -49,6 +49,10 @@ jobs:
             >> "$FILE.tmp"
           mv "$FILE.tmp" "$FILE"
 
+      - name: Update normalized daily metrics
+        working-directory: stats-repo
+        run: python3 scripts/build_daily_metrics.py
+
       - name: Commit and push to private repo
         working-directory: stats-repo
         run: |
