@@ -32,7 +32,7 @@ type Config struct {
 	AdaptiveThreshold       bool     // Enable statistical adaptive threshold mode
 	SensitiveKeyPatterns    []string // Regex patterns for sensitive key detection (stored as strings)
 	AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
-	EntityTypeLabels        bool // Emit [HIDDEN:<type>:<hash>] instead of [HIDDEN:<hash>]
+	EntityTypeLabels        bool     // Emit [HIDDEN:<type>:<hash>] instead of [HIDDEN:<hash>]
 	CustomRegexes           []CustomRegexRule
 	SafeRegexes             []CustomRegexRule
 	CombinedCustomRegex     *regexp.Regexp // Optimized "Mega-Regex" (O(1) match)
