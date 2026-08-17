@@ -32,6 +32,7 @@ type Config struct {
 	AdaptiveThreshold       bool     // Enable statistical adaptive threshold mode
 	SensitiveKeyPatterns    []string // Regex patterns for sensitive key detection (stored as strings)
 	AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
+	EntityTypeLabels        bool     // Emit [HIDDEN:<type>:<hash>] instead of [HIDDEN:<hash>]
 	CustomRegexes           []CustomRegexRule
 	SafeRegexes             []CustomRegexRule
 	CombinedCustomRegex     *regexp.Regexp // Optimized "Mega-Regex" (O(1) match)
@@ -248,6 +249,7 @@ func DefaultConfig() Config {
 		BigramDefaultScore:      -7.0,                    // Default for unknown bigrams
 		AdaptiveThreshold:       false,                   // Disabled by default (User feedback)
 		AdaptiveBaselineSamples: 100,                     // Default baseline sample size
+		EntityTypeLabels:        false,                   // Legacy [HIDDEN:<hash>] format by default
 		SensitiveKeys: []string{
 			"pass", "secret", "token", "key", "cvv", "cvc", "auth", "sign",
 			"password", "passwd", "api_key", "apikey", "access_token", "client_secret",
@@ -314,6 +316,11 @@ func loadConfig() Config {
 		if score, err := parseFloat(envBigramScore); err == nil {
 			cfg.BigramDefaultScore = score
 		}
+	}
+
+	// Opt-in entity-type labels in redaction output: [HIDDEN:<type>:<hash>]
+	if envTruthy(os.Getenv("PII_ENTITY_TYPE_LABELS")) {
+		cfg.EntityTypeLabels = true
 	}
 
 	// Load adaptive threshold mode
@@ -578,6 +585,17 @@ func (st *configState) calculateBigramAdjustment(token string) float64 {
 	return 0.0
 }
 
+// entityLabel returns the entity-type label to embed in the redaction marker
+// when EntityTypeLabels is enabled, or "" for the legacy unlabeled format.
+// The set of types is deliberately small and fixed: card, key, context, url,
+// regex, entropy (named custom rules keep their own name instead).
+func (st *configState) entityLabel(entityType string) string {
+	if st.config.EntityTypeLabels {
+		return entityType
+	}
+	return ""
+}
+
 func (st *configState) redactWithHMAC(sensitiveData string, name string, strategy string, sb *strings.Builder) {
 	if RedactionCallback != nil {
 		if strategy == "" {
@@ -624,7 +642,8 @@ func redactString(sensitiveData string) string {
 	sb := bufferPool.Get().(*strings.Builder)
 	sb.Reset()
 	defer bufferPool.Put(sb)
-	cfgState().redactWithHMAC(sensitiveData, "", "entropy", sb)
+	st := cfgState()
+	st.redactWithHMAC(sensitiveData, st.entityLabel("entropy"), "entropy", sb)
 	return sb.String()
 }
 
@@ -725,7 +744,7 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 		if st.isSafeRegexWhitelisted(secret) {
 			sb.WriteString(secret)
 		} else {
-			st.redactWithHMAC(secret, "", "luhn", sb)
+			st.redactWithHMAC(secret, st.entityLabel("card"), "luhn", sb)
 		}
 
 		chunkStart = lr.End
@@ -958,6 +977,9 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 				}
 
 				// Use hashed redaction for Custom Regex
+				if matchName == "" {
+					matchName = st.entityLabel("regex")
+				}
 				st.redactWithHMAC(content, matchName, "regex", sb)
 
 				if quoteChar != 0 {
@@ -985,7 +1007,11 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 					}
 
 					// Use hashed redaction for Custom Regex
-					st.redactWithHMAC(content, rule.Name, "regex", sb)
+					ruleName := rule.Name
+					if ruleName == "" {
+						ruleName = st.entityLabel("regex")
+					}
+					st.redactWithHMAC(content, ruleName, "regex", sb)
 
 					if quoteChar != 0 {
 						sb.WriteByte(quoteChar)
@@ -1066,7 +1092,13 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 		if quoteChar != 0 {
 			sb.WriteByte(quoteChar)
 		}
-		st.redactWithHMAC(content, "", "entropy", sb)
+		entityType := "entropy"
+		if forcedSensitive {
+			entityType = "key"
+		} else if contextSensitive {
+			entityType = "context"
+		}
+		st.redactWithHMAC(content, st.entityLabel(entityType), "entropy", sb)
 		if quoteChar != 0 {
 			sb.WriteByte(quoteChar)
 		}
@@ -1291,13 +1323,13 @@ func (st *configState) maskURLParameters(url string, sb *strings.Builder) {
 				} else if st.isSensitiveKey(key) {
 					sb.WriteString(key)
 					sb.WriteRune('=')
-					st.redactWithHMAC(val, "", "entropy", sb)
+					st.redactWithHMAC(val, st.entityLabel("key"), "entropy", sb)
 				} else {
 					score := st.calculateComplexity(val)
 					if score > entropyThreshold {
 						sb.WriteString(key)
 						sb.WriteRune('=')
-						st.redactWithHMAC(val, "", "entropy", sb)
+						st.redactWithHMAC(val, st.entityLabel("url"), "entropy", sb)
 					} else {
 						sb.WriteString(param)
 					}
