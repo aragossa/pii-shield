@@ -48,7 +48,7 @@ func TestProcessEqualPairEdgeCases(t *testing.T) {
 	var sb strings.Builder
 
 	// Test normal assignment
-	isKey, _ := cfgState().processEqualPair("config=safevalue", false, false, &sb)
+	isKey, _ := cfgState().processEqualPair("config=safevalue", false, false, &sb, 0)
 	if isKey {
 		t.Errorf("Expected config=safevalue not to be treated as a sensitive key")
 	}
@@ -57,7 +57,7 @@ func TestProcessEqualPairEdgeCases(t *testing.T) {
 
 	// Test quoted assignment
 	sb.Reset()
-	_, _ = cfgState().processEqualPair(`"password=mysecret"`, false, false, &sb)
+	_, _ = cfgState().processEqualPair(`"password=mysecret"`, false, false, &sb, 0)
 	if !strings.Contains(sb.String(), "[HIDDEN") {
 		t.Errorf("Expected quoted password assignment to be identified as sensitive and redacted, got: %s", sb.String())
 	}
@@ -65,7 +65,7 @@ func TestProcessEqualPairEdgeCases(t *testing.T) {
 	sb.Reset()
 
 	// Test nested assignment (data=key=val)
-	_, handled := cfgState().processEqualPair("data=config=safevalue", false, false, &sb)
+	_, handled := cfgState().processEqualPair("data=config=safevalue", false, false, &sb, 0)
 	if !handled {
 		t.Errorf("Expected nested assignment to be handled")
 	}
@@ -76,7 +76,7 @@ func TestProcessEqualPairEdgeCases(t *testing.T) {
 	// separator ("data"=key=val): the non-sensitive outer key "data" recurses
 	// into processTokenLogic on "key=val", which redacts "val" because "key"
 	// is a default sensitive key.
-	_, handled = cfgState().processEqualPair(`"data=key=val"`, false, false, &sb)
+	_, handled = cfgState().processEqualPair(`"data=key=val"`, false, false, &sb, 0)
 	if !handled {
 		t.Errorf("Expected quoted nested assignment to be handled")
 	}
@@ -89,7 +89,7 @@ func TestProcessEqualPairEdgeCases(t *testing.T) {
 	// Test quoted assignment where the value has no further separator
 	// ("data"=hello): the non-sensitive outer key "data" recurses via
 	// scanLine on the plain value instead.
-	_, handled = cfgState().processEqualPair(`"data=hello"`, false, false, &sb)
+	_, handled = cfgState().processEqualPair(`"data=hello"`, false, false, &sb, 0)
 	if !handled {
 		t.Errorf("Expected quoted plain-value assignment to be handled")
 	}

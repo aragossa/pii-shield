@@ -98,6 +98,14 @@ var (
 
 	DefaultMinSecretLength = 6
 	MaxMinSecretLength     = 1024
+
+	// maxTokenRecursionDepth bounds the mutual recursion between
+	// processTokenLogic, processEqualPair/processColonPair, and
+	// scanSegment/scanLine. Untrusted input like a 2MB "a=a=a=...b" chain
+	// otherwise recurses once per '=' (measured: 53.5s wall, 779MB RSS for
+	// one line). Past the limit the remainder is scored as one opaque token,
+	// which keeps normal entropy-based redaction (fail-safe).
+	maxTokenRecursionDepth = 32
 )
 
 var luhnPool *sync.Pool
@@ -122,11 +130,11 @@ func init() {
 	}
 }
 
-// parseFloat parses a float from string, returns error if invalid
+// parseFloat parses a float from string, returns error if invalid.
+// Strict: trailing junk ("9.9junk") is an error, unlike fmt.Sscanf which
+// silently stops at the first non-numeric character.
 func parseFloat(s string) (float64, error) {
-	var result float64
-	_, err := fmt.Sscanf(s, "%f", &result)
-	return result, err
+	return strconv.ParseFloat(strings.TrimSpace(s), 64)
 }
 
 // parseInt parses an int from string, returns error if invalid
@@ -288,6 +296,8 @@ func loadConfig() Config {
 	if envThreshold := os.Getenv("PII_ENTROPY_THRESHOLD"); envThreshold != "" {
 		if threshold, err := parseFloat(envThreshold); err == nil {
 			cfg.EntropyThreshold = threshold
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: PII_ENTROPY_THRESHOLD must be a number. Using default %v.\n", cfg.EntropyThreshold)
 		}
 	}
 
@@ -295,6 +305,8 @@ func loadConfig() Config {
 	if envConfThreshold := os.Getenv("PII_CONFIDENCE_THRESHOLD"); envConfThreshold != "" {
 		if confThreshold, err := parseFloat(envConfThreshold); err == nil {
 			cfg.ConfidenceThreshold = confThreshold
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: PII_CONFIDENCE_THRESHOLD must be a number. Using default %v.\n", cfg.ConfidenceThreshold)
 		}
 	}
 
@@ -315,6 +327,8 @@ func loadConfig() Config {
 	if envBigramScore := os.Getenv("PII_BIGRAM_DEFAULT_SCORE"); envBigramScore != "" {
 		if score, err := parseFloat(envBigramScore); err == nil {
 			cfg.BigramDefaultScore = score
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: PII_BIGRAM_DEFAULT_SCORE must be a number. Using default %v.\n", cfg.BigramDefaultScore)
 		}
 	}
 
@@ -680,12 +694,14 @@ func (st *configState) ScanAndRedact(logLine string) string {
 	sb.Grow(len(logLine) + 100)
 	defer bufferPool.Put(sb)
 
-	st.scanLine(logLine, sb)
+	st.scanLine(logLine, sb, 0)
 	return sb.String()
 }
 
-// scanLine is the zero-allocation internal version of ScanAndRedact
-func (st *configState) scanLine(logLine string, sb *strings.Builder) {
+// scanLine is the zero-allocation internal version of ScanAndRedact.
+// depth tracks nesting of the recursive token machinery (see
+// maxTokenRecursionDepth); top-level callers pass 0.
+func (st *configState) scanLine(logLine string, sb *strings.Builder, depth int) {
 	if len(logLine) == 0 {
 		return
 	}
@@ -737,7 +753,7 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 	for _, lr := range luhnRanges {
 		if lr.Start > chunkStart {
 			safeSegment := logLine[chunkStart:lr.Start]
-			st.scanSegment(safeSegment, sb)
+			st.scanSegment(safeSegment, sb, depth)
 		}
 
 		secret := logLine[lr.Start:lr.End]
@@ -752,7 +768,7 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 
 	if chunkStart < len(logLine) {
 		safeSegment := logLine[chunkStart:]
-		st.scanSegment(safeSegment, sb)
+		st.scanSegment(safeSegment, sb, depth)
 	}
 }
 
@@ -760,7 +776,7 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 // It iterates runes and respects " and ' bounds.
 // scanSegment implements a Context-Aware & Quote-Aware Tokenizer.
 // It handles: escaped quotes, spaces, and sensitive key tracking.
-func (st *configState) scanSegment(segment string, sb *strings.Builder) {
+func (st *configState) scanSegment(segment string, sb *strings.Builder, depth int) {
 	n := len(segment)
 	start := 0
 	inQuote := false
@@ -817,7 +833,7 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder) {
 				if seenInvalid {
 					token = strings.ToValidUTF8(token, "\uFFFD")
 				}
-				st.processAndAppend(token, sb, &state)
+				st.processAndAppend(token, sb, &state, depth)
 			}
 			sb.WriteRune(r)
 			i += width
@@ -834,7 +850,7 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder) {
 		if seenInvalid {
 			token = strings.ToValidUTF8(token, "\uFFFD")
 		}
-		st.processAndAppend(token, sb, &state)
+		st.processAndAppend(token, sb, &state, depth)
 	}
 }
 
@@ -842,20 +858,27 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder) {
 // forcedSensitive: if true, treat this token as a Value that MUST be protected (skips MinLength).
 // contextSensitive: if true, reduce entropy threshold (Context Aware).
 // isValuePos: if true, this token MUST be a value (skiye key checks).
-func (st *configState) processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive bool, isValuePos bool, overrideSensitivity bool, sb *strings.Builder) (isKey bool) {
+func (st *configState) processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive bool, isValuePos bool, overrideSensitivity bool, sb *strings.Builder, depth int) (isKey bool) {
+	// Recursion bound: past the limit, score the remainder as one opaque
+	// token instead of descending further (see maxTokenRecursionDepth).
+	if depth > maxTokenRecursionDepth {
+		st.processSingleToken(trimQuotes(rawToken), rawToken, forcedSensitive, contextSensitive, true, sb)
+		return false
+	}
+
 	if strings.Contains(rawToken, "://") || (strings.Contains(rawToken, "?") && strings.Contains(rawToken, "=")) {
 		st.maskURLParameters(rawToken, sb)
 		return false
 	}
 
 	// 1. Check for Key=Value (e.g. key=value)
-	isKey, handled := st.processEqualPair(rawToken, forcedSensitive, overrideSensitivity, sb)
+	isKey, handled := st.processEqualPair(rawToken, forcedSensitive, overrideSensitivity, sb, depth)
 	if handled {
 		return isKey
 	}
 
 	// 2. Check for Key:Value (e.g. "key": "value" or "key":value)
-	isKey, handled = st.processColonPair(rawToken, overrideSensitivity, sb)
+	isKey, handled = st.processColonPair(rawToken, overrideSensitivity, sb, depth)
 	if handled {
 		return isKey
 	}
@@ -890,7 +913,7 @@ func (st *configState) processTokenLogic(rawToken string, forcedSensitive bool, 
 			sb.WriteByte(first)
 			// Recursive scan of the inner content
 			// This handles "Error: 1.2.3.4 failed" by splitting it into tokens
-			st.scanSegment(trimmed, sb)
+			st.scanSegment(trimmed, sb, depth+1)
 			// Write closing quote
 			sb.WriteByte(last)
 			return false
@@ -1113,7 +1136,7 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 	sb.WriteString(original)
 }
 
-func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, overrideSensitivity bool, sb *strings.Builder) (isKey bool, handled bool) {
+func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, overrideSensitivity bool, sb *strings.Builder, depth int) (isKey bool, handled bool) {
 	idx := strings.IndexByte(rawToken, '=')
 	if idx == -1 {
 		return false, false
@@ -1149,12 +1172,12 @@ func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, o
 					// We need to call processTokenLogic again on the value.
 					// Pass false for forcedSensitive since the parent key wasn't sensitive.
 					// Pass overrideSensitivity (likely false here).
-					// NOTE: We must ensure we don't infinite loop. Max depth?
-					// processTokenLogic handles this.
-					st.processTokenLogic(val, false, false, false, overrideSensitivity, sb)
+					// Depth-bounded: processTokenLogic stops descending past
+					// maxTokenRecursionDepth.
+					st.processTokenLogic(val, false, false, false, overrideSensitivity, sb, depth+1)
 				} else {
 					// Recursive scan for non-sensitive keys (e.g. "data=key=val")
-					st.scanLine(val, sb)
+					st.scanLine(val, sb, depth+1)
 				}
 			}
 			sb.WriteString(quote)
@@ -1174,7 +1197,7 @@ func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, o
 
 		if containsSep := strings.Contains(val, "=") || strings.Contains(val, ":"); containsSep && !keySensitive {
 			// Recursive handling for "data=key=val" where "data" is safe.
-			st.processTokenLogic(val, false, false, false, overrideSensitivity, sb)
+			st.processTokenLogic(val, false, false, false, overrideSensitivity, sb, depth+1)
 		} else {
 			st.processSingleToken(val, val, keySensitive, false, false, sb)
 		}
@@ -1184,7 +1207,7 @@ func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, o
 	return false, false
 }
 
-func (st *configState) processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Builder) (isKey bool, handled bool) {
+func (st *configState) processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Builder, depth int) (isKey bool, handled bool) {
 	if strings.Contains(rawToken, "://") {
 		return false, false // URL-like
 	}
@@ -1240,7 +1263,7 @@ func (st *configState) processColonPair(rawToken string, overrideSensitivity boo
 		// compact JSON with no space after ':') must be unwrapped and
 		// re-tokenized so an embedded secret is scored on its own, the same way
 		// it already is when whitespace follows the colon (B9).
-		st.processTokenLogic(val, keySensitive, false, true, false, sb)
+		st.processTokenLogic(val, keySensitive, false, true, false, sb, depth+1)
 
 		return keySensitive, true
 	}
@@ -1602,8 +1625,12 @@ func FindLuhnSequences(line string) []Range {
 	// Reset slice length to 0, keep capacity
 	digitIndices := (*digitIndicesPtr)[:0]
 
-	for i, r := range line {
-		if unicode.IsDigit(r) {
+	// Collect ASCII digits only: the validation below (validLuhnFromIndices,
+	// countDistinctDigits) does byte math (line[idx]-'0'), so collecting
+	// non-ASCII digits via unicode.IsDigit would feed it rune start offsets
+	// of multibyte characters — garbage arithmetic on continuation bytes.
+	for i := 0; i < len(line); i++ {
+		if line[i] >= '0' && line[i] <= '9' {
 			digitIndices = append(digitIndices, i)
 		}
 	}
@@ -1727,17 +1754,38 @@ func areDigitsConnected(line string, indices []int) bool {
 	return true
 }
 
+// prevRune decodes the rune ending at byte offset idx (exclusive), with an
+// ASCII fast path. A single byte cast (rune(line[idx-1])) misreads multibyte
+// UTF-8 neighbors: the continuation byte of a Cyrillic letter looks like a
+// non-letter Latin-1 rune and lets a letter-adjacent card run pass.
+func prevRune(line string, idx int) rune {
+	if b := line[idx-1]; b < utf8.RuneSelf {
+		return rune(b)
+	}
+	r, _ := utf8.DecodeLastRuneInString(line[:idx])
+	return r
+}
+
+// nextRune decodes the rune starting at byte offset idx, ASCII fast path.
+func nextRune(line string, idx int) rune {
+	if b := line[idx]; b < utf8.RuneSelf {
+		return rune(b)
+	}
+	r, _ := utf8.DecodeRuneInString(line[idx:])
+	return r
+}
+
 func isValidBoundary(line string, startIdx, endIdx int) bool {
 	// BOUNDARY CHECK: Ensure we are not inside a word or larger number
 	if startIdx > 0 {
-		r := rune(line[startIdx-1])
+		r := prevRune(line, startIdx)
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			return false
 		}
 		// UUID/Alphanumeric check: if separator is '-', check prev char
 		if r == '-' || r == '.' {
 			if startIdx > 1 {
-				r2 := rune(line[startIdx-2])
+				r2 := prevRune(line, startIdx-1)
 				if unicode.IsLetter(r2) {
 					return false
 				}
@@ -1751,14 +1799,14 @@ func isValidBoundary(line string, startIdx, endIdx int) bool {
 		}
 	}
 	if endIdx < len(line) {
-		r := rune(line[endIdx])
+		r := nextRune(line, endIdx)
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			return false
 		}
 		// UUID/Alphanumeric check: if separator is '-', check next char
 		if r == '-' || r == '.' {
 			if endIdx+1 < len(line) {
-				r2 := rune(line[endIdx+1])
+				r2 := nextRune(line, endIdx+1)
 				if unicode.IsLetter(r2) {
 					return false
 				}
@@ -1937,7 +1985,7 @@ type segmentState struct {
 	nextValueIsSensitive bool // True if "key"="password", so next "value" is sensitive
 }
 
-func (st *configState) processAndAppend(token string, sb *strings.Builder, state *segmentState) {
+func (st *configState) processAndAppend(token string, sb *strings.Builder, state *segmentState, depth int) {
 	// 0. Pre-analysis for Generic Key State (before token is consumed/redacted)
 	trimmed := strings.TrimSpace(token)
 	cleanToken := trimmed
@@ -1952,7 +2000,7 @@ func (st *configState) processAndAppend(token string, sb *strings.Builder, state
 	isGenericKeyName := lowerClean == "key" || lowerClean == "name" || lowerClean == "setting"
 
 	// 1. Process Token
-	isKey := st.processTokenLogic(token, state.pendingKeySensitive, state.pendingContextSensitive, state.isInValuePos, state.nextValueIsSensitive, sb)
+	isKey := st.processTokenLogic(token, state.pendingKeySensitive, state.pendingContextSensitive, state.isInValuePos, state.nextValueIsSensitive, sb, depth)
 	// sb is updated inside processTokenLogic
 
 	// 2. Update Context State

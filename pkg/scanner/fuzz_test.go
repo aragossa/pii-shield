@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -17,8 +18,10 @@ func FuzzScanner(f *testing.F) {
 	f.Add("::1")                                 // IPv6
 	f.Add(string([]byte{0xff, 0xfe, 0xfd}))      // Invalid UTF-8
 	f.Add(`{"nested": {"deep": {"secret": "123"}}}`)
-	f.Add("key\u00A0value") // Non-breaking space
-	f.Add("key\tvalue")     // Tab
+	f.Add("key\u00A0value")                                   // Non-breaking space
+	f.Add("key\tvalue")                                       // Tab
+	f.Add(strings.Repeat("a=", 10_000) + "b")                 // Deep '=' chain (recursion depth bound, SCN-S 2d)
+	f.Add("\u043A\u0430\u0440\u0442\u04304539148803436467 x") // Multibyte neighbor at Luhn boundary (SCN-S 2c)
 
 	f.Fuzz(func(t *testing.T, input string) {
 		// 1. Crash Check: Should not panic
