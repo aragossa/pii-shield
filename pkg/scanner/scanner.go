@@ -364,30 +364,52 @@ func loadConfig() Config {
 		}
 	}
 
-	// Load Custom Regex List. The CLI keeps its fail-fast behavior by turning a
-	// compile error from the shared helper into a fatal error here.
+	// Load Custom Regex List. A malformed list or entry warns and is skipped
+	// instead of terminating (B6): loadConfig also runs inside library
+	// embedders via package init, where log.Fatalf would kill the host
+	// process before its main() ever ran. Same policy as the
+	// PII_SENSITIVE_KEY_PATTERNS path above.
 	if envCustomRegex := os.Getenv("PII_CUSTOM_REGEX_LIST"); envCustomRegex != "" {
 		var rawRules []CustomRegexConfig
 		if err := json.Unmarshal([]byte(envCustomRegex), &rawRules); err != nil {
-			log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid json format: %v", err)
-		}
-		if err := cfg.ApplyCustomRegexes(rawRules); err != nil {
-			log.Fatalf("PII_CUSTOM_REGEX_LIST error: %v", err)
+			fmt.Fprintf(os.Stderr, "WARNING: PII_CUSTOM_REGEX_LIST ignored: invalid json format: %v\n", err)
+		} else {
+			rawRules = dropInvalidRegexRules("PII_CUSTOM_REGEX_LIST", rawRules)
+			if err := cfg.ApplyCustomRegexes(rawRules); err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: PII_CUSTOM_REGEX_LIST error: %v\n", err)
+			}
 		}
 	}
 
-	// Load Safe Regex List (Whitelist)
+	// Load Safe Regex List (Whitelist). Same warn-and-skip policy as above.
 	if envSafeRegex := os.Getenv("PII_SAFE_REGEX_LIST"); envSafeRegex != "" {
 		var rawRules []CustomRegexConfig
 		if err := json.Unmarshal([]byte(envSafeRegex), &rawRules); err != nil {
-			log.Fatalf("PII_SAFE_REGEX_LIST error: invalid json format: %v", err)
-		}
-		if err := cfg.ApplySafeRegexes(rawRules); err != nil {
-			log.Fatalf("PII_SAFE_REGEX_LIST error: %v", err)
+			fmt.Fprintf(os.Stderr, "WARNING: PII_SAFE_REGEX_LIST ignored: invalid json format: %v\n", err)
+		} else {
+			rawRules = dropInvalidRegexRules("PII_SAFE_REGEX_LIST", rawRules)
+			if err := cfg.ApplySafeRegexes(rawRules); err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: PII_SAFE_REGEX_LIST error: %v\n", err)
+			}
 		}
 	}
 
 	return cfg
+}
+
+// dropInvalidRegexRules filters out entries whose pattern does not compile,
+// warning once per dropped rule, so a single typo disables that rule only —
+// not the whole list and not the process (B6).
+func dropInvalidRegexRules(envName string, raw []CustomRegexConfig) []CustomRegexConfig {
+	valid := make([]CustomRegexConfig, 0, len(raw))
+	for _, r := range raw {
+		if _, err := regexp.Compile(r.Pattern); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: %s: skipping invalid regex %q: %v\n", envName, r.Pattern, err)
+			continue
+		}
+		valid = append(valid, r)
+	}
+	return valid
 }
 
 // buildConfigState compiles cfg into the immutable snapshot the scan engine

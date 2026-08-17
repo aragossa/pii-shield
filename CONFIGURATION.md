@@ -62,7 +62,7 @@ The stats summary is a single log line per interval, e.g.
 | `PII_CUSTOM_REGEX_LIST` | JSON array of regex objects to enforce redaction regardless of entropy. Supports named placeholders. |
 
 > [!WARNING]
-> **Fatal on invalid input:** malformed JSON or an invalid regex pattern in `PII_CUSTOM_REGEX_LIST` or `PII_SAFE_REGEX_LIST` terminates the process at startup, before any log line is processed. In a sidecar this shows up as a crash loop. Validate the JSON and every pattern before rollout.
+> **Invalid input is skipped, not fatal:** malformed JSON in `PII_CUSTOM_REGEX_LIST` or `PII_SAFE_REGEX_LIST` disables that list, and an invalid regex pattern disables that rule only — each with a startup `WARNING` on stderr, while scanning continues with the remaining rules. A skipped **custom** rule means its matches are no longer force-redacted, and a skipped **safe** rule means its matches lose their whitelist protection — so still validate patterns before rollout and watch startup logs. (Earlier versions terminated the process at startup instead, which showed up as a crash loop in a sidecar.)
 
 ### Example
 
