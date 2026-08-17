@@ -61,6 +61,40 @@ func TestInvalidRegexListDoesNotKillProcess(t *testing.T) {
 		}
 	})
 
+	t.Run("in-process loadConfig branches", func(t *testing.T) {
+		// The subprocess runs above prove survival end-to-end but execute in
+		// an uninstrumented child process; these direct loadConfig calls —
+		// possible at all only because loadConfig no longer terminates —
+		// exercise the same branches in-process for coverage.
+		t.Setenv("PII_SALT", "0123456789abcdef0123456789abcdef")
+
+		t.Setenv("PII_CUSTOM_REGEX_LIST", "not json")
+		if cfg := loadConfig(); len(cfg.CustomRegexes) != 0 {
+			t.Errorf("invalid JSON should disable the custom list, got %d rules", len(cfg.CustomRegexes))
+		}
+		t.Setenv("PII_CUSTOM_REGEX_LIST", `[{"pattern":"([","name":"broken"},{"pattern":"^[A-Z]{7}$","name":"code"}]`)
+		if cfg := loadConfig(); len(cfg.CustomRegexes) != 1 || cfg.CustomRegexes[0].Name != "code" {
+			t.Errorf("expected the intact custom rule to survive, got %+v", cfg.CustomRegexes)
+		}
+		t.Setenv("PII_CUSTOM_REGEX_LIST", "")
+
+		t.Setenv("PII_SAFE_REGEX_LIST", "not json")
+		if cfg := loadConfig(); len(cfg.SafeRegexes) != 0 {
+			t.Errorf("invalid JSON should disable the safe list, got %d rules", len(cfg.SafeRegexes))
+		}
+		t.Setenv("PII_SAFE_REGEX_LIST", `[{"pattern":"([","name":"broken"},{"pattern":"^ok$","name":"keep"}]`)
+		if cfg := loadConfig(); len(cfg.SafeRegexes) != 1 || cfg.SafeRegexes[0].Name != "keep" {
+			t.Errorf("expected the intact safe rule to survive, got %+v", cfg.SafeRegexes)
+		}
+		t.Setenv("PII_SAFE_REGEX_LIST", "")
+
+		// Same warn-and-continue policy for sensitive key patterns.
+		t.Setenv("PII_SENSITIVE_KEY_PATTERNS", "([")
+		if cfg := loadConfig(); len(cfg.SensitiveKeys) == 0 {
+			t.Errorf("bad key pattern must not wipe defaults")
+		}
+	})
+
 	t.Run("broken safe rule skipped, intact safe rule still protects", func(t *testing.T) {
 		// AbC9xY2kQ8pLmN0r redacts via entropy at default config; the intact
 		// safe rule must keep protecting it after the broken rule is dropped.
