@@ -24,6 +24,8 @@ Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail ins
 | `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive, substring match). **Replaces** the default list instead of extending it. | `pass,secret,token,key,cvv,cvc,auth,sign,password,passwd,api_key,apikey,access_token,client_secret,aws_access_key_id,aws_secret_access_key,gcp_credentials,slack_token` |
 | `PII_SENSITIVE_KEY_PATTERNS` | Comma-separated list of regex patterns for key detection. | (empty) |
 
+> **Strict numeric parsing:** an invalid value in `PII_ENTROPY_THRESHOLD`, `PII_CONFIDENCE_THRESHOLD`, or `PII_BIGRAM_DEFAULT_SCORE` — including trailing junk like `3.6junk` — is rejected with a startup `WARNING` and the default is kept. Earlier versions silently applied the numeric prefix of such values.
+
 ## Advanced Features
 
 | Variable | Description | Default |
