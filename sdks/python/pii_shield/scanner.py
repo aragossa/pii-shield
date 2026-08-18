@@ -18,6 +18,8 @@ class PiiShieldConfig:
     disable_bigram_check: Optional[bool] = None
     # Enable experimental statistical adaptive-threshold mode.
     adaptive_threshold: Optional[bool] = None
+    # Emit [HIDDEN:<type>:<hash>] markers (type is card/key/context/url/regex/entropy).
+    entity_type_labels: Optional[bool] = None
     # Regex patterns matched against key names to detect sensitive keys.
     sensitive_key_patterns: Optional[List[str]] = None
     # Custom rules forcing redaction: [{"pattern": ..., "name": ...}].
@@ -79,6 +81,8 @@ class PiiShield:
             cfg_dict["disable_bigram_check"] = self.config.disable_bigram_check
         if self.config.adaptive_threshold is not None:
             cfg_dict["adaptive_threshold"] = self.config.adaptive_threshold
+        if self.config.entity_type_labels is not None:
+            cfg_dict["entity_type_labels"] = self.config.entity_type_labels
         if self.config.sensitive_key_patterns is not None:
             cfg_dict["sensitive_key_patterns"] = self.config.sensitive_key_patterns
         if self.config.custom_regexes is not None:
