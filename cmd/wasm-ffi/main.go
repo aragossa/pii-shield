@@ -23,6 +23,7 @@ type ConfigFromSDK struct {
 	SensitiveKeys        []string                    `json:"sensitive_keys"`
 	DisableBigramCheck   *bool                       `json:"disable_bigram_check"`
 	AdaptiveThreshold    *bool                       `json:"adaptive_threshold"`
+	EntityTypeLabels     *bool                       `json:"entity_type_labels"`
 	SensitiveKeyPatterns []string                    `json:"sensitive_key_patterns"`
 	CustomRegexes        []scanner.CustomRegexConfig `json:"custom_regexes"`
 	SafeRegexes          []scanner.CustomRegexConfig `json:"safe_regexes"`
@@ -93,6 +94,9 @@ func init_config(ptr uint32, length uint32) {
 		}
 		if sdkCfg.AdaptiveThreshold != nil {
 			cfg.AdaptiveThreshold = *sdkCfg.AdaptiveThreshold
+		}
+		if sdkCfg.EntityTypeLabels != nil {
+			cfg.EntityTypeLabels = *sdkCfg.EntityTypeLabels
 		}
 		// Regex-backed fields go through the shared compile helpers. Errors are
 		// deliberately swallowed: unlike the CLI (which fails fast at startup),
