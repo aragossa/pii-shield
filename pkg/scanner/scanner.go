@@ -32,6 +32,7 @@ type Config struct {
 	AdaptiveThreshold       bool     // Enable statistical adaptive threshold mode
 	SensitiveKeyPatterns    []string // Regex patterns for sensitive key detection (stored as strings)
 	AdaptiveBaselineSamples int      // Number of samples for adaptive baseline
+	EntityTypeLabels        bool     // Emit [HIDDEN:<type>:<hash>] instead of [HIDDEN:<hash>]
 	CustomRegexes           []CustomRegexRule
 	SafeRegexes             []CustomRegexRule
 	CombinedCustomRegex     *regexp.Regexp // Optimized "Mega-Regex" (O(1) match)
@@ -97,6 +98,14 @@ var (
 
 	DefaultMinSecretLength = 6
 	MaxMinSecretLength     = 1024
+
+	// maxTokenRecursionDepth bounds the mutual recursion between
+	// processTokenLogic, processEqualPair/processColonPair, and
+	// scanSegment/scanLine. Untrusted input like a 2MB "a=a=a=...b" chain
+	// otherwise recurses once per '=' (measured: 53.5s wall, 779MB RSS for
+	// one line). Past the limit the remainder is scored as one opaque token,
+	// which keeps normal entropy-based redaction (fail-safe).
+	maxTokenRecursionDepth = 32
 )
 
 var luhnPool *sync.Pool
@@ -121,11 +130,11 @@ func init() {
 	}
 }
 
-// parseFloat parses a float from string, returns error if invalid
+// parseFloat parses a float from string, returns error if invalid.
+// Strict: trailing junk ("9.9junk") is an error, unlike fmt.Sscanf which
+// silently stops at the first non-numeric character.
 func parseFloat(s string) (float64, error) {
-	var result float64
-	_, err := fmt.Sscanf(s, "%f", &result)
-	return result, err
+	return strconv.ParseFloat(strings.TrimSpace(s), 64)
 }
 
 // parseInt parses an int from string, returns error if invalid
@@ -248,6 +257,7 @@ func DefaultConfig() Config {
 		BigramDefaultScore:      -7.0,                    // Default for unknown bigrams
 		AdaptiveThreshold:       false,                   // Disabled by default (User feedback)
 		AdaptiveBaselineSamples: 100,                     // Default baseline sample size
+		EntityTypeLabels:        false,                   // Legacy [HIDDEN:<hash>] format by default
 		SensitiveKeys: []string{
 			"pass", "secret", "token", "key", "cvv", "cvc", "auth", "sign",
 			"password", "passwd", "api_key", "apikey", "access_token", "client_secret",
@@ -286,6 +296,8 @@ func loadConfig() Config {
 	if envThreshold := os.Getenv("PII_ENTROPY_THRESHOLD"); envThreshold != "" {
 		if threshold, err := parseFloat(envThreshold); err == nil {
 			cfg.EntropyThreshold = threshold
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: PII_ENTROPY_THRESHOLD must be a number. Using default %v.\n", cfg.EntropyThreshold)
 		}
 	}
 
@@ -293,6 +305,8 @@ func loadConfig() Config {
 	if envConfThreshold := os.Getenv("PII_CONFIDENCE_THRESHOLD"); envConfThreshold != "" {
 		if confThreshold, err := parseFloat(envConfThreshold); err == nil {
 			cfg.ConfidenceThreshold = confThreshold
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: PII_CONFIDENCE_THRESHOLD must be a number. Using default %v.\n", cfg.ConfidenceThreshold)
 		}
 	}
 
@@ -313,7 +327,14 @@ func loadConfig() Config {
 	if envBigramScore := os.Getenv("PII_BIGRAM_DEFAULT_SCORE"); envBigramScore != "" {
 		if score, err := parseFloat(envBigramScore); err == nil {
 			cfg.BigramDefaultScore = score
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: PII_BIGRAM_DEFAULT_SCORE must be a number. Using default %v.\n", cfg.BigramDefaultScore)
 		}
+	}
+
+	// Opt-in entity-type labels in redaction output: [HIDDEN:<type>:<hash>]
+	if envTruthy(os.Getenv("PII_ENTITY_TYPE_LABELS")) {
+		cfg.EntityTypeLabels = true
 	}
 
 	// Load adaptive threshold mode
@@ -343,30 +364,52 @@ func loadConfig() Config {
 		}
 	}
 
-	// Load Custom Regex List. The CLI keeps its fail-fast behavior by turning a
-	// compile error from the shared helper into a fatal error here.
+	// Load Custom Regex List. A malformed list or entry warns and is skipped
+	// instead of terminating (B6): loadConfig also runs inside library
+	// embedders via package init, where log.Fatalf would kill the host
+	// process before its main() ever ran. Same policy as the
+	// PII_SENSITIVE_KEY_PATTERNS path above.
 	if envCustomRegex := os.Getenv("PII_CUSTOM_REGEX_LIST"); envCustomRegex != "" {
 		var rawRules []CustomRegexConfig
 		if err := json.Unmarshal([]byte(envCustomRegex), &rawRules); err != nil {
-			log.Fatalf("PII_CUSTOM_REGEX_LIST error: invalid json format: %v", err)
-		}
-		if err := cfg.ApplyCustomRegexes(rawRules); err != nil {
-			log.Fatalf("PII_CUSTOM_REGEX_LIST error: %v", err)
+			fmt.Fprintf(os.Stderr, "WARNING: PII_CUSTOM_REGEX_LIST ignored: invalid json format: %v\n", err)
+		} else {
+			rawRules = dropInvalidRegexRules("PII_CUSTOM_REGEX_LIST", rawRules)
+			if err := cfg.ApplyCustomRegexes(rawRules); err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: PII_CUSTOM_REGEX_LIST error: %v\n", err)
+			}
 		}
 	}
 
-	// Load Safe Regex List (Whitelist)
+	// Load Safe Regex List (Whitelist). Same warn-and-skip policy as above.
 	if envSafeRegex := os.Getenv("PII_SAFE_REGEX_LIST"); envSafeRegex != "" {
 		var rawRules []CustomRegexConfig
 		if err := json.Unmarshal([]byte(envSafeRegex), &rawRules); err != nil {
-			log.Fatalf("PII_SAFE_REGEX_LIST error: invalid json format: %v", err)
-		}
-		if err := cfg.ApplySafeRegexes(rawRules); err != nil {
-			log.Fatalf("PII_SAFE_REGEX_LIST error: %v", err)
+			fmt.Fprintf(os.Stderr, "WARNING: PII_SAFE_REGEX_LIST ignored: invalid json format: %v\n", err)
+		} else {
+			rawRules = dropInvalidRegexRules("PII_SAFE_REGEX_LIST", rawRules)
+			if err := cfg.ApplySafeRegexes(rawRules); err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: PII_SAFE_REGEX_LIST error: %v\n", err)
+			}
 		}
 	}
 
 	return cfg
+}
+
+// dropInvalidRegexRules filters out entries whose pattern does not compile,
+// warning once per dropped rule, so a single typo disables that rule only —
+// not the whole list and not the process (B6).
+func dropInvalidRegexRules(envName string, raw []CustomRegexConfig) []CustomRegexConfig {
+	valid := make([]CustomRegexConfig, 0, len(raw))
+	for _, r := range raw {
+		if _, err := regexp.Compile(r.Pattern); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: %s: skipping invalid regex %q: %v\n", envName, r.Pattern, err)
+			continue
+		}
+		valid = append(valid, r)
+	}
+	return valid
 }
 
 // buildConfigState compiles cfg into the immutable snapshot the scan engine
@@ -578,6 +621,17 @@ func (st *configState) calculateBigramAdjustment(token string) float64 {
 	return 0.0
 }
 
+// entityLabel returns the entity-type label to embed in the redaction marker
+// when EntityTypeLabels is enabled, or "" for the legacy unlabeled format.
+// The set of types is deliberately small and fixed: card, key, context, url,
+// regex, entropy (named custom rules keep their own name instead).
+func (st *configState) entityLabel(entityType string) string {
+	if st.config.EntityTypeLabels {
+		return entityType
+	}
+	return ""
+}
+
 func (st *configState) redactWithHMAC(sensitiveData string, name string, strategy string, sb *strings.Builder) {
 	if RedactionCallback != nil {
 		if strategy == "" {
@@ -624,7 +678,8 @@ func redactString(sensitiveData string) string {
 	sb := bufferPool.Get().(*strings.Builder)
 	sb.Reset()
 	defer bufferPool.Put(sb)
-	cfgState().redactWithHMAC(sensitiveData, "", "entropy", sb)
+	st := cfgState()
+	st.redactWithHMAC(sensitiveData, st.entityLabel("entropy"), "entropy", sb)
 	return sb.String()
 }
 
@@ -661,12 +716,14 @@ func (st *configState) ScanAndRedact(logLine string) string {
 	sb.Grow(len(logLine) + 100)
 	defer bufferPool.Put(sb)
 
-	st.scanLine(logLine, sb)
+	st.scanLine(logLine, sb, 0)
 	return sb.String()
 }
 
-// scanLine is the zero-allocation internal version of ScanAndRedact
-func (st *configState) scanLine(logLine string, sb *strings.Builder) {
+// scanLine is the zero-allocation internal version of ScanAndRedact.
+// depth tracks nesting of the recursive token machinery (see
+// maxTokenRecursionDepth); top-level callers pass 0.
+func (st *configState) scanLine(logLine string, sb *strings.Builder, depth int) {
 	if len(logLine) == 0 {
 		return
 	}
@@ -718,14 +775,14 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 	for _, lr := range luhnRanges {
 		if lr.Start > chunkStart {
 			safeSegment := logLine[chunkStart:lr.Start]
-			st.scanSegment(safeSegment, sb)
+			st.scanSegment(safeSegment, sb, depth)
 		}
 
 		secret := logLine[lr.Start:lr.End]
 		if st.isSafeRegexWhitelisted(secret) {
 			sb.WriteString(secret)
 		} else {
-			st.redactWithHMAC(secret, "", "luhn", sb)
+			st.redactWithHMAC(secret, st.entityLabel("card"), "luhn", sb)
 		}
 
 		chunkStart = lr.End
@@ -733,7 +790,7 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 
 	if chunkStart < len(logLine) {
 		safeSegment := logLine[chunkStart:]
-		st.scanSegment(safeSegment, sb)
+		st.scanSegment(safeSegment, sb, depth)
 	}
 }
 
@@ -741,7 +798,7 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder) {
 // It iterates runes and respects " and ' bounds.
 // scanSegment implements a Context-Aware & Quote-Aware Tokenizer.
 // It handles: escaped quotes, spaces, and sensitive key tracking.
-func (st *configState) scanSegment(segment string, sb *strings.Builder) {
+func (st *configState) scanSegment(segment string, sb *strings.Builder, depth int) {
 	n := len(segment)
 	start := 0
 	inQuote := false
@@ -798,7 +855,7 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder) {
 				if seenInvalid {
 					token = strings.ToValidUTF8(token, "\uFFFD")
 				}
-				st.processAndAppend(token, sb, &state)
+				st.processAndAppend(token, sb, &state, depth)
 			}
 			sb.WriteRune(r)
 			i += width
@@ -815,7 +872,7 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder) {
 		if seenInvalid {
 			token = strings.ToValidUTF8(token, "\uFFFD")
 		}
-		st.processAndAppend(token, sb, &state)
+		st.processAndAppend(token, sb, &state, depth)
 	}
 }
 
@@ -823,20 +880,27 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder) {
 // forcedSensitive: if true, treat this token as a Value that MUST be protected (skips MinLength).
 // contextSensitive: if true, reduce entropy threshold (Context Aware).
 // isValuePos: if true, this token MUST be a value (skiye key checks).
-func (st *configState) processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive bool, isValuePos bool, overrideSensitivity bool, sb *strings.Builder) (isKey bool) {
+func (st *configState) processTokenLogic(rawToken string, forcedSensitive bool, contextSensitive bool, isValuePos bool, overrideSensitivity bool, sb *strings.Builder, depth int) (isKey bool) {
+	// Recursion bound: past the limit, score the remainder as one opaque
+	// token instead of descending further (see maxTokenRecursionDepth).
+	if depth > maxTokenRecursionDepth {
+		st.processSingleToken(trimQuotes(rawToken), rawToken, forcedSensitive, contextSensitive, true, sb)
+		return false
+	}
+
 	if strings.Contains(rawToken, "://") || (strings.Contains(rawToken, "?") && strings.Contains(rawToken, "=")) {
 		st.maskURLParameters(rawToken, sb)
 		return false
 	}
 
 	// 1. Check for Key=Value (e.g. key=value)
-	isKey, handled := st.processEqualPair(rawToken, forcedSensitive, overrideSensitivity, sb)
+	isKey, handled := st.processEqualPair(rawToken, forcedSensitive, overrideSensitivity, sb, depth)
 	if handled {
 		return isKey
 	}
 
 	// 2. Check for Key:Value (e.g. "key": "value" or "key":value)
-	isKey, handled = st.processColonPair(rawToken, overrideSensitivity, sb)
+	isKey, handled = st.processColonPair(rawToken, overrideSensitivity, sb, depth)
 	if handled {
 		return isKey
 	}
@@ -871,7 +935,7 @@ func (st *configState) processTokenLogic(rawToken string, forcedSensitive bool, 
 			sb.WriteByte(first)
 			// Recursive scan of the inner content
 			// This handles "Error: 1.2.3.4 failed" by splitting it into tokens
-			st.scanSegment(trimmed, sb)
+			st.scanSegment(trimmed, sb, depth+1)
 			// Write closing quote
 			sb.WriteByte(last)
 			return false
@@ -958,6 +1022,9 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 				}
 
 				// Use hashed redaction for Custom Regex
+				if matchName == "" {
+					matchName = st.entityLabel("regex")
+				}
 				st.redactWithHMAC(content, matchName, "regex", sb)
 
 				if quoteChar != 0 {
@@ -985,7 +1052,11 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 					}
 
 					// Use hashed redaction for Custom Regex
-					st.redactWithHMAC(content, rule.Name, "regex", sb)
+					ruleName := rule.Name
+					if ruleName == "" {
+						ruleName = st.entityLabel("regex")
+					}
+					st.redactWithHMAC(content, ruleName, "regex", sb)
 
 					if quoteChar != 0 {
 						sb.WriteByte(quoteChar)
@@ -1066,7 +1137,13 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 		if quoteChar != 0 {
 			sb.WriteByte(quoteChar)
 		}
-		st.redactWithHMAC(content, "", "entropy", sb)
+		entityType := "entropy"
+		if forcedSensitive {
+			entityType = "key"
+		} else if contextSensitive {
+			entityType = "context"
+		}
+		st.redactWithHMAC(content, st.entityLabel(entityType), "entropy", sb)
 		if quoteChar != 0 {
 			sb.WriteByte(quoteChar)
 		}
@@ -1081,7 +1158,7 @@ func (st *configState) processSingleToken(content, original string, forcedSensit
 	sb.WriteString(original)
 }
 
-func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, overrideSensitivity bool, sb *strings.Builder) (isKey bool, handled bool) {
+func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, overrideSensitivity bool, sb *strings.Builder, depth int) (isKey bool, handled bool) {
 	idx := strings.IndexByte(rawToken, '=')
 	if idx == -1 {
 		return false, false
@@ -1117,12 +1194,12 @@ func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, o
 					// We need to call processTokenLogic again on the value.
 					// Pass false for forcedSensitive since the parent key wasn't sensitive.
 					// Pass overrideSensitivity (likely false here).
-					// NOTE: We must ensure we don't infinite loop. Max depth?
-					// processTokenLogic handles this.
-					st.processTokenLogic(val, false, false, false, overrideSensitivity, sb)
+					// Depth-bounded: processTokenLogic stops descending past
+					// maxTokenRecursionDepth.
+					st.processTokenLogic(val, false, false, false, overrideSensitivity, sb, depth+1)
 				} else {
 					// Recursive scan for non-sensitive keys (e.g. "data=key=val")
-					st.scanLine(val, sb)
+					st.scanLine(val, sb, depth+1)
 				}
 			}
 			sb.WriteString(quote)
@@ -1142,7 +1219,7 @@ func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, o
 
 		if containsSep := strings.Contains(val, "=") || strings.Contains(val, ":"); containsSep && !keySensitive {
 			// Recursive handling for "data=key=val" where "data" is safe.
-			st.processTokenLogic(val, false, false, false, overrideSensitivity, sb)
+			st.processTokenLogic(val, false, false, false, overrideSensitivity, sb, depth+1)
 		} else {
 			st.processSingleToken(val, val, keySensitive, false, false, sb)
 		}
@@ -1152,7 +1229,7 @@ func (st *configState) processEqualPair(rawToken string, forcedSensitive bool, o
 	return false, false
 }
 
-func (st *configState) processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Builder) (isKey bool, handled bool) {
+func (st *configState) processColonPair(rawToken string, overrideSensitivity bool, sb *strings.Builder, depth int) (isKey bool, handled bool) {
 	if strings.Contains(rawToken, "://") {
 		return false, false // URL-like
 	}
@@ -1208,7 +1285,7 @@ func (st *configState) processColonPair(rawToken string, overrideSensitivity boo
 		// compact JSON with no space after ':') must be unwrapped and
 		// re-tokenized so an embedded secret is scored on its own, the same way
 		// it already is when whitespace follows the colon (B9).
-		st.processTokenLogic(val, keySensitive, false, true, false, sb)
+		st.processTokenLogic(val, keySensitive, false, true, false, sb, depth+1)
 
 		return keySensitive, true
 	}
@@ -1291,13 +1368,13 @@ func (st *configState) maskURLParameters(url string, sb *strings.Builder) {
 				} else if st.isSensitiveKey(key) {
 					sb.WriteString(key)
 					sb.WriteRune('=')
-					st.redactWithHMAC(val, "", "entropy", sb)
+					st.redactWithHMAC(val, st.entityLabel("key"), "entropy", sb)
 				} else {
 					score := st.calculateComplexity(val)
 					if score > entropyThreshold {
 						sb.WriteString(key)
 						sb.WriteRune('=')
-						st.redactWithHMAC(val, "", "entropy", sb)
+						st.redactWithHMAC(val, st.entityLabel("url"), "entropy", sb)
 					} else {
 						sb.WriteString(param)
 					}
@@ -1570,8 +1647,12 @@ func FindLuhnSequences(line string) []Range {
 	// Reset slice length to 0, keep capacity
 	digitIndices := (*digitIndicesPtr)[:0]
 
-	for i, r := range line {
-		if unicode.IsDigit(r) {
+	// Collect ASCII digits only: the validation below (validLuhnFromIndices,
+	// countDistinctDigits) does byte math (line[idx]-'0'), so collecting
+	// non-ASCII digits via unicode.IsDigit would feed it rune start offsets
+	// of multibyte characters — garbage arithmetic on continuation bytes.
+	for i := 0; i < len(line); i++ {
+		if line[i] >= '0' && line[i] <= '9' {
 			digitIndices = append(digitIndices, i)
 		}
 	}
@@ -1695,17 +1776,38 @@ func areDigitsConnected(line string, indices []int) bool {
 	return true
 }
 
+// prevRune decodes the rune ending at byte offset idx (exclusive), with an
+// ASCII fast path. A single byte cast (rune(line[idx-1])) misreads multibyte
+// UTF-8 neighbors: the continuation byte of a Cyrillic letter looks like a
+// non-letter Latin-1 rune and lets a letter-adjacent card run pass.
+func prevRune(line string, idx int) rune {
+	if b := line[idx-1]; b < utf8.RuneSelf {
+		return rune(b)
+	}
+	r, _ := utf8.DecodeLastRuneInString(line[:idx])
+	return r
+}
+
+// nextRune decodes the rune starting at byte offset idx, ASCII fast path.
+func nextRune(line string, idx int) rune {
+	if b := line[idx]; b < utf8.RuneSelf {
+		return rune(b)
+	}
+	r, _ := utf8.DecodeRuneInString(line[idx:])
+	return r
+}
+
 func isValidBoundary(line string, startIdx, endIdx int) bool {
 	// BOUNDARY CHECK: Ensure we are not inside a word or larger number
 	if startIdx > 0 {
-		r := rune(line[startIdx-1])
+		r := prevRune(line, startIdx)
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			return false
 		}
 		// UUID/Alphanumeric check: if separator is '-', check prev char
 		if r == '-' || r == '.' {
 			if startIdx > 1 {
-				r2 := rune(line[startIdx-2])
+				r2 := prevRune(line, startIdx-1)
 				if unicode.IsLetter(r2) {
 					return false
 				}
@@ -1719,14 +1821,14 @@ func isValidBoundary(line string, startIdx, endIdx int) bool {
 		}
 	}
 	if endIdx < len(line) {
-		r := rune(line[endIdx])
+		r := nextRune(line, endIdx)
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			return false
 		}
 		// UUID/Alphanumeric check: if separator is '-', check next char
 		if r == '-' || r == '.' {
 			if endIdx+1 < len(line) {
-				r2 := rune(line[endIdx+1])
+				r2 := nextRune(line, endIdx+1)
 				if unicode.IsLetter(r2) {
 					return false
 				}
@@ -1905,7 +2007,7 @@ type segmentState struct {
 	nextValueIsSensitive bool // True if "key"="password", so next "value" is sensitive
 }
 
-func (st *configState) processAndAppend(token string, sb *strings.Builder, state *segmentState) {
+func (st *configState) processAndAppend(token string, sb *strings.Builder, state *segmentState, depth int) {
 	// 0. Pre-analysis for Generic Key State (before token is consumed/redacted)
 	trimmed := strings.TrimSpace(token)
 	cleanToken := trimmed
@@ -1920,7 +2022,7 @@ func (st *configState) processAndAppend(token string, sb *strings.Builder, state
 	isGenericKeyName := lowerClean == "key" || lowerClean == "name" || lowerClean == "setting"
 
 	// 1. Process Token
-	isKey := st.processTokenLogic(token, state.pendingKeySensitive, state.pendingContextSensitive, state.isInValuePos, state.nextValueIsSensitive, sb)
+	isKey := st.processTokenLogic(token, state.pendingKeySensitive, state.pendingContextSensitive, state.isInValuePos, state.nextValueIsSensitive, sb, depth)
 	// sb is updated inside processTokenLogic
 
 	// 2. Update Context State

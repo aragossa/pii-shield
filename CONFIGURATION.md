@@ -24,6 +24,8 @@ Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail ins
 | `PII_SENSITIVE_KEYS` | Comma-separated list of keys to *always* redact values for (case-insensitive, substring match). **Replaces** the default list instead of extending it. | `pass,secret,token,key,cvv,cvc,auth,sign,password,passwd,api_key,apikey,access_token,client_secret,aws_access_key_id,aws_secret_access_key,gcp_credentials,slack_token` |
 | `PII_SENSITIVE_KEY_PATTERNS` | Comma-separated list of regex patterns for key detection. | (empty) |
 
+> **Strict numeric parsing:** an invalid value in `PII_ENTROPY_THRESHOLD`, `PII_CONFIDENCE_THRESHOLD`, or `PII_BIGRAM_DEFAULT_SCORE` — including trailing junk like `3.6junk` — is rejected with a startup `WARNING` and the default is kept. Earlier versions silently applied the numeric prefix of such values.
+
 ## Advanced Features
 
 | Variable | Description | Default |
@@ -32,6 +34,7 @@ Set `PII_REQUIRE_STRONG_SALT=true` in production if you want startup to fail ins
 | `PII_ADAPTIVE_SAMPLES` | Number of samples to collect before activating adaptive mode. | `100` |
 | `PII_DISABLE_BIGRAM_CHECK` | Disable English bigram validation. Set to `true` for non-English logs. | `false` |
 | `PII_BIGRAM_DEFAULT_SCORE` | Log-probability score for unknown bigrams. | `-7.0` |
+| `PII_ENTITY_TYPE_LABELS` | Emit `[HIDDEN:<type>:<hash>]` instead of `[HIDDEN:<hash>]`, where `<type>` names the detector that fired: `card` (Luhn), `key` (sensitive key), `context` (context keyword), `url` (URL parameter entropy), `regex` (unnamed custom rule), `entropy` (plain entropy). Named custom rules keep their own name as the label. The hash is unchanged, so enabling the flag does not break tag correlation. Accepts `1`/`true`/`yes`/`y`/`on`. | `false` |
 
 ## Runtime Failure Policy
 
@@ -59,7 +62,7 @@ The stats summary is a single log line per interval, e.g.
 | `PII_CUSTOM_REGEX_LIST` | JSON array of regex objects to enforce redaction regardless of entropy. Supports named placeholders. |
 
 > [!WARNING]
-> **Fatal on invalid input:** malformed JSON or an invalid regex pattern in `PII_CUSTOM_REGEX_LIST` or `PII_SAFE_REGEX_LIST` terminates the process at startup, before any log line is processed. In a sidecar this shows up as a crash loop. Validate the JSON and every pattern before rollout.
+> **Invalid input is skipped, not fatal:** malformed JSON in `PII_CUSTOM_REGEX_LIST` or `PII_SAFE_REGEX_LIST` disables that list, and an invalid regex pattern disables that rule only — each with a startup `WARNING` on stderr, while scanning continues with the remaining rules. A skipped **custom** rule means its matches are no longer force-redacted, and a skipped **safe** rule means its matches lose their whitelist protection — so still validate patterns before rollout and watch startup logs. (Earlier versions terminated the process at startup instead, which showed up as a crash loop in a sidecar.)
 
 ### Example
 

@@ -11,6 +11,7 @@ PII_CONFIDENCE_THRESHOLD=1.0
 PII_MIN_SECRET_LENGTH=6
 PII_SENSITIVE_KEYS=password,secret,token,key,api_key
 PII_ADAPTIVE_THRESHOLD=false
+PII_ENTITY_TYPE_LABELS=false
 PII_FAIL_POLICY=open
 
 # Optional deterministic redaction and allow-list rules.

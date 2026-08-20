@@ -11,6 +11,8 @@ export interface PiiShieldConfig {
     disableBigramCheck?: boolean;
     /** Enable experimental statistical adaptive-threshold mode. */
     adaptiveThreshold?: boolean;
+    /** Emit [HIDDEN:<type>:<hash>] markers (type is card/key/context/url/regex/entropy). Off by default. */
+    entityTypeLabels?: boolean;
     /** Regex patterns matched against key names to detect sensitive keys. */
     sensitiveKeyPatterns?: string[];
     /** Custom rules forcing redaction of matching tokens. */
