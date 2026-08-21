@@ -672,25 +672,6 @@ func (st *configState) redactWithHMAC(sensitiveData string, name string, strateg
 	sb.WriteString("]")
 }
 
-// redactString is a helper for JSON/Map paths that require a string return.
-// It uses a pooled builder to minimize allocs, but still allocates the result string.
-func redactString(sensitiveData string) string {
-	sb := bufferPool.Get().(*strings.Builder)
-	sb.Reset()
-	defer bufferPool.Put(sb)
-	st := cfgState()
-	st.redactWithHMAC(sensitiveData, st.entityLabel("entropy"), "entropy", sb)
-	return sb.String()
-}
-
-func processSingleTokenToString(content, original string, forcedSensitive, contextSensitive bool) string {
-	sb := bufferPool.Get().(*strings.Builder)
-	sb.Reset()
-	defer bufferPool.Put(sb)
-	cfgState().processSingleToken(content, original, forcedSensitive, contextSensitive, false, sb)
-	return sb.String()
-}
-
 // -----------------------------------------------------------------------------
 // 2. Main Scanner (Quotes & Key-Value Aware)
 // -----------------------------------------------------------------------------
@@ -728,34 +709,8 @@ func (st *configState) scanLine(logLine string, sb *strings.Builder, depth int) 
 		return
 	}
 
-	// TODO: verify if needed or can be removed
-	/*
-		trimmed := strings.TrimSpace(logLine)
-
-		// URL Optimization
-
-		if strings.HasPrefix(trimmed, "GET ") || strings.HasPrefix(trimmed, "POST ") || strings.Contains(trimmed, "://") {
-			// Rely on scanSegment
-		}
-	*/
-
-	// OPTIMIZATION PHASE 3: Disable processJSONLine
-	// Standard JSON parsing is too slow. Our tokenizer handles JSON structure (quotes, braces) naturally.
-	// This removes the map[string]interface{} boxing overhead.
-	/*
-		if strings.HasPrefix(trimmed, "{") {
-			if jsonProcessed, ok := processJSONLine(trimmed); ok {
-				sb.WriteString(jsonProcessed)
-				return
-			}
-		}
-		if strings.HasPrefix(trimmed, "{") {
-			if jsonProcessed, ok := processJSONLine(trimmed); ok {
-				sb.WriteString(jsonProcessed)
-				return
-			}
-		}
-	*/
+	// JSON lines are handled by the tokenizer itself (quotes, braces, colon
+	// pairs) — deliberately no encoding/json parse here; see compact_json_test.go.
 
 	luhnRanges := FindLuhnSequences(logLine)
 
@@ -1858,143 +1813,6 @@ func isDigits(s string) bool {
 
 func isHex(r rune) bool {
 	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
-}
-
-// -----------------------------------------------------------------------------
-// 3. Robust JSON Parser (using encoding/json)
-// -----------------------------------------------------------------------------
-
-func processJSONLine(line string) (string, bool) {
-	var data map[string]interface{}
-	decoder := json.NewDecoder(strings.NewReader(line))
-	decoder.UseNumber() // Preserve large integers/IDs as json.Number
-
-	if err := decoder.Decode(&data); err != nil {
-		return "", false
-	}
-
-	redactMap(data)
-
-	// Re-serialize
-	// Note: output key order is not guaranteed, but JSON semantically the same.
-	b, err := json.Marshal(data)
-	if err != nil {
-		return "", false
-	}
-	return string(b), true
-}
-
-func redactMap(m map[string]interface{}) {
-	handleGenericKVPair(m)
-
-	for k, v := range m {
-		processMapElement(k, v, m)
-	}
-}
-
-func redactSlice(s []interface{}) {
-	for i, v := range s {
-		switch val := v.(type) {
-		case map[string]interface{}:
-			redactMap(val)
-		case []interface{}:
-			redactSlice(val)
-		case string:
-			// Recursive scan for array strings too
-			processed := ScanAndRedact(val)
-			if processed != val {
-				s[i] = processed
-			}
-		case json.Number:
-			str := val.String()
-			proc := processSingleTokenToString(str, str, false, false)
-			if proc != str {
-				s[i] = 0
-			}
-		case float64:
-			str := fmt.Sprintf("%v", val)
-			proc := processSingleTokenToString(str, str, false, false)
-			if proc != str {
-				s[i] = 0
-			}
-		}
-	}
-}
-
-func handleGenericKVPair(m map[string]interface{}) {
-	// 0. Generic KV Pair Support (Constraint: "key": "sensitive", "value": "secret")
-	// If we detect this pattern, efficiently redact the "value" field.
-	if kVal, ok := m["key"].(string); ok {
-		if cfgState().isSensitiveKey(kVal) {
-			if _, hasVal := m["value"]; hasVal {
-				// Redact value regardless of type
-				switch v := m["value"].(type) {
-				case string:
-					m["value"] = redactString(v)
-				case json.Number:
-					m["value"] = 0
-				case float64:
-					m["value"] = 0
-				}
-			}
-		}
-	}
-}
-
-func processMapElement(k string, v interface{}, m map[string]interface{}) {
-	// Calculate key sensitivity once
-	isKeySensitive := cfgState().isSensitiveKey(k)
-
-	switch val := v.(type) {
-	case map[string]interface{}:
-		redactMap(val)
-	case []interface{}:
-		redactSlice(val)
-	case string:
-		// String redaction
-		if isKeySensitive {
-			m[k] = redactString(val)
-		} else {
-			// Recursively scan the string value!
-			// This handles:
-			// 1. Nested JSON strings (e.g. "data": "{\"foo\":...}")
-			// 2. Unstructured PII (Luhn/CCs) inside the string
-			// 3. Key=Value pairs inside the string
-			processed := ScanAndRedact(val)
-			if processed != val {
-				m[k] = processed
-			}
-		}
-	case json.Number:
-		// Number redaction - Preserve Type!
-		if isKeySensitive {
-			// E.g. "cvv": 123 -> "cvv": 0
-			m[k] = 0
-		} else {
-			// Check Entropy (e.g. Credit Card numbers as Ints)
-			s := val.String()
-			// Use heuristics on string rep
-			// Note: We don't recurse ScanAndRedact here to avoid parsing number as JSON/Luhn line?
-			// Luhn might work on "4111..."
-			// But ScanAndRedact wraps result? No.
-			processed := processSingleTokenToString(s, s, false, false)
-			if processed != s {
-				// It was redacted. Convert to 0.
-				m[k] = 0
-			}
-		}
-	case float64:
-		if isKeySensitive {
-			m[k] = 0
-		} else {
-			s := fmt.Sprintf("%v", val)
-			processed := processSingleTokenToString(s, s, false, false)
-			if processed != s {
-				m[k] = 0
-			}
-		}
-		// bools are usually safe
-	}
 }
 
 type segmentState struct {

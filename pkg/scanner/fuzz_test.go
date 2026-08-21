@@ -55,14 +55,3 @@ func FuzzScanner(f *testing.F) {
 		// Verify idempotency (should not crash or double-redact if logic works)
 	})
 }
-
-func FuzzJSONParser(f *testing.F) {
-	f.Add(`{"key": "value"}`)
-	f.Add(`{"nested": {"a": 1}}`)
-	f.Add(`{"broken": `)
-
-	f.Fuzz(func(t *testing.T, input string) {
-		// We only care if it panics or hangs
-		_, _ = processJSONLine(input)
-	})
-}
