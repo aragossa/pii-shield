@@ -36,6 +36,8 @@ FILES=(
   sdks/node/package.json
   sdks/python/pyproject.toml
   README.md
+  docs/application-readiness.md
+  tests/deployments/docker-ghcr/README.md
 )
 
 # Emit the file with VERSION stamped in. Patterns are anchored so only the
@@ -57,6 +59,10 @@ transform() {
     */sdks/python/pyproject.toml)
       # [project] version, anchored at column 0 (dependency pins are indented).
       sed -E "s|^version = \"[^\"]*\"|version = \"${VERSION}\"|" "$file" ;;
+    */docs/application-readiness.md|*/tests/deployments/docker-ghcr/README.md)
+      # Docker image tags in usage examples (thelisdeep/pii-shield:X.Y.Z,
+      # ghcr.io/pii-shield/pii-shield:X.Y.Z).
+      sed -E "s|(pii-shield):[0-9][0-9A-Za-z.-]*|\1:${VERSION}|g" "$file" ;;
     */README.md)
       sed -E \
         -e "s|release-v[0-9][0-9A-Za-z.-]*-blue|release-v${VERSION}-blue|g" \
