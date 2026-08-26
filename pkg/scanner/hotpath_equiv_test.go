@@ -145,10 +145,10 @@ var bigramEquivCorpus = []string{
 	"1234567890",
 	"user_id=42;q",
 	"key:value/path",
-	"пароль",           // non-ASCII: ToLower path
-	"Аутентификация",   // non-ASCII with uppercase
-	"mixedПароль123",   // mixed ASCII + multibyte
-	"emoji🙂token",      // multibyte non-letter
+	"пароль",         // non-ASCII: ToLower path
+	"Аутентификация", // non-ASCII with uppercase
+	"mixedПароль123", // mixed ASCII + multibyte
+	"emoji🙂token",    // multibyte non-letter
 	"ends-with-upperZ",
 	"Z@#$%^&*()aa",
 }
@@ -176,9 +176,10 @@ func TestBigramInlineLowerEquivalence(t *testing.T) {
 	}
 }
 
-// TestRedactWithHMACFormatUnchanged covers O4: the stack-buffer hex encoding
-// must keep the marker format and the deterministic hash prefix (hunter2
-// under the campaign salt is always 3920d5).
+// TestRedactWithHMACFormatUnchanged pins the redaction marker format and the
+// deterministic hash prefix (hunter2 under the campaign salt is always
+// 3920d5). Written for O4, which measured no win and was dropped; the
+// contract it guards is worth keeping for any future attempt at that hunk.
 func TestRedactWithHMACFormatUnchanged(t *testing.T) {
 	oldCfg := activeCfg()
 	defer UpdateConfig(oldCfg)
