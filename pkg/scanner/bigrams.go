@@ -75,3 +75,14 @@ func (st *configState) bigramProb(b string) float64 {
 	// This allows tuning for different language environments
 	return st.config.BigramDefaultScore
 }
+
+// bigramProbBytes is bigramProb for a two-byte bigram without building an
+// intermediate string: the string(bg[:]) conversion sits directly in the map
+// index expression, which the compiler compiles to an allocation-free lookup.
+func (st *configState) bigramProbBytes(b0, b1 byte) float64 {
+	bg := [2]byte{b0, b1}
+	if v, ok := EnglishBigramFreqs[string(bg[:])]; ok {
+		return v
+	}
+	return st.config.BigramDefaultScore
+}

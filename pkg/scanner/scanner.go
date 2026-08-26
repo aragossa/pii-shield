@@ -74,6 +74,10 @@ var (
 
 	logTable [256]float64
 
+	// sepTable marks scanSegment's separator set " \t,;[]{}()<>"; all
+	// separators are ASCII, so runes >= utf8.RuneSelf are never separators.
+	sepTable [utf8.RuneSelf]bool
+
 	bufferPool = sync.Pool{
 		New: func() interface{} {
 			return new(strings.Builder)
@@ -128,6 +132,16 @@ func init() {
 	for i := 1; i < 256; i++ {
 		logTable[i] = math.Log2(float64(i))
 	}
+
+	for _, c := range []byte(" \t,;[]{}()<>") {
+		sepTable[c] = true
+	}
+}
+
+// isSepRune reports whether r is one of scanSegment's token separators,
+// equivalent to strings.ContainsRune(" \t,;[]{}()<>", r).
+func isSepRune(r rune) bool {
+	return r >= 0 && r < utf8.RuneSelf && sepTable[r]
 }
 
 // parseFloat parses a float from string, returns error if invalid.
@@ -523,13 +537,27 @@ func calculateShannon(token string) float64 {
 
 	if isASCII {
 		entropy := 0.0
-		logLen := math.Log2(float64(totalChars))
+		// logTable is filled in init() by the same math.Log2 calls, so a
+		// lookup is bit-identical to computing Log2 directly; indices >= 256
+		// (tokens longer than 255 bytes) fall back to math.Log2.
+		var logLen float64
+		if totalChars < 256 {
+			logLen = logTable[totalChars]
+		} else {
+			logLen = math.Log2(float64(totalChars))
+		}
 		for _, count := range counts {
 			if count == 0 {
 				continue
 			}
+			var logCount float64
+			if count < 256 {
+				logCount = logTable[count]
+			} else {
+				logCount = math.Log2(float64(count))
+			}
 			p := float64(count) / float64(totalChars)
-			entropy -= p * (math.Log2(float64(count)) - logLen)
+			entropy -= p * (logCount - logLen)
 		}
 		return entropy
 	}
@@ -601,11 +629,25 @@ func (st *configState) calculateBigramAdjustment(token string) float64 {
 
 	sumProb := 0.0
 	count := 0
-	sLower := strings.ToLower(token)
-	for i := 0; i < len(sLower)-1; i++ {
-		bg := sLower[i : i+2]
-		sumProb += st.bigramProb(bg) // Using shared bigram table from bigrams.go
-		count++
+	if isASCIIString(token) {
+		// For pure-ASCII tokens strings.ToLower only maps A-Z, so an inline
+		// byte lowercase produces the same bigrams without the per-token
+		// allocation. Non-ASCII tokens keep the ToLower path: multibyte
+		// lowercasing changes bytes and must stay byte-identical to before.
+		prev := lowerASCIIByte(token[0])
+		for i := 1; i < len(token); i++ {
+			cur := lowerASCIIByte(token[i])
+			sumProb += st.bigramProbBytes(prev, cur)
+			count++
+			prev = cur
+		}
+	} else {
+		sLower := strings.ToLower(token)
+		for i := 0; i < len(sLower)-1; i++ {
+			bg := sLower[i : i+2]
+			sumProb += st.bigramProb(bg) // Using shared bigram table from bigrams.go
+			count++
+		}
 	}
 
 	if count > 0 {
@@ -619,6 +661,25 @@ func (st *configState) calculateBigramAdjustment(token string) float64 {
 		}
 	}
 	return 0.0
+}
+
+// isASCIIString reports whether s contains only single-byte (ASCII) runes.
+func isASCIIString(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// lowerASCIIByte lowercases A-Z; all other bytes pass through unchanged,
+// which is exactly what strings.ToLower does to a pure-ASCII string.
+func lowerASCIIByte(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
 }
 
 // entityLabel returns the entity-type label to embed in the redaction marker
@@ -762,10 +823,6 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder, depth in
 
 	state := segmentState{}
 
-	isSep := func(r rune) bool {
-		return strings.ContainsRune(" \t,;[]{}()<>", r)
-	}
-
 	// Manual Byte Loop for precise control and skipping
 	i := 0
 	for i < n {
@@ -804,7 +861,7 @@ func (st *configState) scanSegment(segment string, sb *strings.Builder, depth in
 			continue
 		}
 
-		if isSep(r) {
+		if isSepRune(r) {
 			if i > start {
 				token := segment[start:i]
 				if seenInvalid {
